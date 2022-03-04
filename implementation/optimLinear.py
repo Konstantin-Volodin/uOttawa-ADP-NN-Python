@@ -226,3 +226,4 @@ coef_df.columns = ['P','N','Val']
 fig = px.line(coef_df, x='N',y='Val',color='P', title='Linear Approximation - Scheduling Objective', markers=True)
 fig.show(renderer="browser")
 #endregion
+# %%
