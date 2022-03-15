@@ -68,13 +68,13 @@ sub.params.LogToConsole = 0
 # Variables
 sv_sx = sub.addVars(N, vtype=GRB.INTEGER, lb=0, ub=cap, name='sv_x')
 sv_sy = sub.addVars(P, vtype=GRB.INTEGER, lb=0, ub=15, name='sv_y')
-sv_aa = sub.addVars(P, N, vtype=GRB.INTEGER, lb=0, name='sv_y')
-sv_az = sub.addVars(P, vtype=GRB.INTEGER, lb=0, name='sv_y')
+av_aa = sub.addVars(P, N, vtype=GRB.INTEGER, lb=0, name='av_a')
+av_az = sub.addVars(P, vtype=GRB.INTEGER, lb=0, name='av_z')
 
 # State Action Constraints
-sc_cap = sub.addConstrs( (sv_sx[n] + quicksum(sv_aa[(p,n)] for p in P) <= cap for n in N), name='sc_cap')
-sc_scap = sub.addConstr( quicksum(sv_az[p] for p in P) <= scap, name='sc_scap')
-sc_dem = sub.addConstrs( (quicksum(sv_aa[(p,n)] for n in N) + sv_az[p] <= sv_sy[p] for p in P), name='sc_dem' )
+sc_cap = sub.addConstrs( (sv_sx[n] + quicksum(av_aa[(p,n)] for p in P) <= cap for n in N), name='sc_cap')
+sc_scap = sub.addConstr( quicksum(av_az[p] for p in P) <= scap, name='sc_scap')
+sc_dem = sub.addConstrs( (quicksum(av_aa[(p,n)] for n in N) + av_az[p] <= sv_sy[p] for p in P), name='sc_dem' )
 #endregion
 
 #region Phase 1
@@ -92,10 +92,10 @@ while True:
     val_bx = {}
     for n in N:
         val_bx[n] = LinExpr(sv_sx[n])
-        if n != N[-1]: val_bx[n] -= gam * (sv_sx[n+1] + quicksum(sv_aa[(p,n+1)] for p in P))
+        if n != N[-1]: val_bx[n] -= gam * (sv_sx[n+1] + quicksum(av_aa[(p,n+1)] for p in P))
     val_by = {}
     for p in P: 
-        val_by[p] = (1-gam) * sv_sy[p] + gam * (quicksum(sv_aa[p,n] for n in N) + sv_az[p] - E_y[p])
+        val_by[p] = (1-gam) * sv_sy[p] + gam * (quicksum(av_aa[p,n] for n in N) + av_az[p] - E_y[p])
     
     # Update Subproblem
     so_val = ( 
@@ -104,9 +104,9 @@ while True:
         quicksum( mc_by[p].Pi * val_by[p] for p in P ) 
     )
     so_cost = (
-        quicksum( book[(p,n)] * sv_aa[p,n] for p in P for n in N) +
-        quicksum( oc[p] * sv_az[p] for p in P ) +
-        quicksum( lb[p] * (sv_sy[p] - quicksum( sv_aa[p,n] for n in N ) - sv_az[p]) for p in P)
+        quicksum( book[(p,n)] * av_aa[p,n] for p in P for n in N) +
+        quicksum( oc[p] * av_az[p] for p in P ) +
+        quicksum( lb[p] * (sv_sy[p] - quicksum( av_aa[p,n] for n in N ) - av_az[p]) for p in P)
     )
     sub.setObjective( -so_val, GRB.MINIMIZE )
 
@@ -153,10 +153,10 @@ while True:
     val_bx = {}
     for n in N:
         val_bx[n] = LinExpr(sv_sx[n])
-        if n != N[-1]: val_bx[n] -= gam * (sv_sx[n+1] + quicksum(sv_aa[(p,n+1)] for p in P))
+        if n != N[-1]: val_bx[n] -= gam * (sv_sx[n+1] + quicksum(av_aa[(p,n+1)] for p in P))
     val_by = {}
     for p in P: 
-        val_by[p] = (1-gam) * sv_sy[p] + gam * (quicksum(sv_aa[p,n] for n in N) + sv_az[p] - E_y[p])
+        val_by[p] = (1-gam) * sv_sy[p] + gam * (quicksum(av_aa[p,n] for n in N) + av_az[p] - E_y[p])
     
     # Update Subproblem
     so_val = ( 
@@ -165,9 +165,9 @@ while True:
         quicksum( mc_by[p].Pi * val_by[p] for p in P ) 
     )
     so_cost = (
-        quicksum( book[(p,n)] * sv_aa[p,n] for p in P for n in N) +
-        quicksum( oc[p] * sv_az[p] for p in P ) +
-        quicksum( lb[p] * (sv_sy[p] - quicksum( sv_aa[p,n] for n in N ) - sv_az[p]) for p in P)
+        quicksum( book[(p,n)] * av_aa[p,n] for p in P for n in N) +
+        quicksum( oc[p] * av_az[p] for p in P ) +
+        quicksum( lb[p] * (sv_sy[p] - quicksum( av_aa[p,n] for n in N ) - av_az[p]) for p in P)
     )
     sub.setObjective( so_cost-so_val, GRB.MINIMIZE )
 
@@ -200,16 +200,12 @@ while True:
 #endregion
 
 #region Save Data
-# Save Model
-master.write('data/linear-p2.lp')
-
 # Save Betas
 betas = {'b0': mc_b0.Pi, 'bx': {}, 'by': {}}
 for n in N: betas['bx'][n] = mc_bx[n].Pi
 for p in P: betas['by'][p] = mc_by[p].Pi
-
-with open(os.path.join(my_path, 'data','linear-betas.pkl'), 'wb') as outp:
-    pickle.dump(betas, outp, pickle.HIGHEST_PROTOCOL)
+with open('data/linear-betas.pickle', 'wb') as file:
+    pickle.dump(betas, file)
 #endregion
 
 # %%

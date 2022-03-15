@@ -199,11 +199,13 @@ model.learn(total_timesteps=5000)
 evaluate_policy(model, env)
 
 #%%
-# obs = env.reset(debug=True)
-# for i in range(10):
-#     action, _state = model.predict(obs, deterministic=True)
-#     obs, reward, done, info = env.step(action)
-#     # env.render()
-#     if done:
-#       obs = env.reset()
+obs = env.reset(debug=True)
+for i in range(10):
+    action, _state = model.predict(obs, deterministic=True)
+    obs, reward, done, info = env.step(action)
+    # env.render()
+    if done:
+      obs = env.reset()
 
+
+# %%
