@@ -10,7 +10,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import json
 
-
 import matplotlib.pyplot as plt
 from sklearn import *
 import keras
@@ -52,9 +51,17 @@ df_100_100_500['type'] = '100_100_500'
 df_100_200_250['type'] = '100_200_250'
 df_200_100_300['type'] = '200_100_300'
 
+# Iterations
+df_iter = pd.DataFrame()
+for i in range(10):
+    df_new = pd.read_csv(f'data/simulation-value-1-iter{i}_10_50_100.csv')
+    df_new['type'] = f'{i}_10_50_100'
+    df_iter = pd.concat([df_iter, df_new])
+
 # %% Graph Data
 # Review Data
-df_tot = pd.concat([df_100_0_50, df_100_100_150, df_100_200_250, df_100_100_200, df_100_100_300, df_100_100_500, df_200_100_300])
+# df_tot = pd.concat([df_100_100_150, df_100_100_200])
+df_tot = df_iter
 df_tot['x'] = 0
 for n in N: df_tot['x'] += df_tot[f'x_{n+1}']
 df_tot['y'] = 0
@@ -72,6 +79,14 @@ fig.show(renderer='browser')
 fig = px.scatter_3d(df_tot, x='x', y='y', z='avg_cost', color='type')
 fig.update_traces(marker={'size': 4})
 fig.show(renderer='browser')
+
+
+# %% Fit Regression Model 
+
+x_cols = df_tot.drop(['disc_cost','avg_cost', 'type'], axis=1)
+y_cols = df_tot['avg_cost']
+reg = linear_model.Ridge(alpha=0.5)
+reg.fit(x_cols, y_cols)
 
 # %% Fit Neural Network Model and View Predictions
 layers_bounds = (2, 6)
@@ -106,7 +121,8 @@ print(f"nn structure: {nn_layers}, final loss: {history.history['val_mean_absolu
 
 # %% Plotting
 # Predictions
-y_pred = model.predict(x_cols).flatten()
+# y_pred = model.predict(x_cols).flatten()
+y_pred = reg.predict(x_cols).flatten()
 
 # Prediction on a overall graph
 fig = px.scatter_3d(df_tot, x='x', y='y', z='avg_cost', color='type')
@@ -121,27 +137,41 @@ fig.update_traces(marker=dict(size=5))
 fig.show(renderer='browser')
 
 # Predictions generalization on overall graph
-rs = np.random.RandomState(seed = 0)
-nums = 3000
+# rs = np.random.RandomState(seed = 0)
+# nums_tot = 10000
+# p_max = df_tot['y'].max()
+# n_max = df_tot['x'].max()
 
-st_x = {f"x_{n+1}":rs.randint(0, int(data['capacity'])+1, nums) for n in N}
-p_bound = {p: df_tot[f'y_{p}'].max()+1 for p in P}
-st_y = {f"y_{p}":rs.randint(0, p_bound[p], nums) for p in P}
+# # X values
+# st_x = {f"x_{n+1}":[] for n in N}
+# x_val = np.random.randint(0, n_max+1, size=nums_tot)
+# for x_val_i in x_val:
+#     x_vals = np.random.multinomial(x_val_i, np.ones(len(N))/len(N))
+#     for n in N: st_x[f'x_{n+1}'].append(x_vals[n])
 
-df_test = pd.DataFrame.from_dict({**st_y, **st_x})
-df_test['x'] = 0
-for n in N: df_test['x'] += df_test[f'x_{n+1}']
-df_test['y'] = 0
-for p in P: df_test['y'] += df_test[f'y_{p}']
-df_test = pd.concat([df_test, df_tot.drop(columns = ['type','disc_cost','avg_cost'])])
-df_test = df_test.sort_values(by=['x','y'])
+# # Y Values
+# st_y = {f"y_{p}":[] for p in P}
+# y_val = np.random.randint(0, p_max+1, size=nums_tot)
+# for y_val_i in y_val:
+#     y_vals = np.random.multinomial(y_val_i, np.ones(len(P))/len(P))
+#     for p in P: st_y[f'y_{p}'].append(y_vals[P.index(p)])
 
+# # Create Dataframe
+# df_test = pd.DataFrame.from_dict({**st_y, **st_x})
+# df_test['x'] = 0
+# for n in N: df_test['x'] += df_test[f'x_{n+1}']
+# df_test['y'] = 0
+# for p in P: df_test['y'] += df_test[f'y_{p}']
+# df_test = pd.concat([df_test, df_tot.drop(columns = ['type','disc_cost','avg_cost'])])
+# df_test = df_test.sort_values(by=['x','y'])
 
-y_pred = model.predict(df_test).flatten()
-fig = px.scatter_3d(df_tot, x='x', y='y', z='avg_cost', color='type')
-fig.add_scatter3d(x=df_test['x'], y=df_test['y'], z=y_pred, mode='markers')
-fig.update_traces(marker=dict(size=3))
-fig.show(renderer='browser')
+# # Prediction
+# # # y_pred = model.predict(df_test).flatten()
+# y_pred = reg.predict(df_test).flatten()
+# fig = px.scatter_3d(df_tot, x='x', y='y', z='avg_cost', color='type')
+# fig.add_scatter3d(x=df_test['x'], y=df_test['y'], z=y_pred, mode='markers')
+# fig.update_traces(marker=dict(size=3))
+# fig.show(renderer='browser')
 
 
 # %%

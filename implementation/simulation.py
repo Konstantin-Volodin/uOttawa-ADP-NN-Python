@@ -45,10 +45,6 @@ for p,n in itertools.product(P, N):
         for k in range(0, (n+1) - tg[p]):
             book[(p,n)] += (gam**k) * lb[p]
 
-# PPQ Betas
-with open('data/linear-betas.pickle', 'rb') as file:
-    PPQbetas = pickle.load(file)
-
 
 # Sim Weights
 #endregion
@@ -194,7 +190,7 @@ def RLPolicy(state):
     ### Policy: Policy is created using Sample Baselines 3 with algorithm with custom environment
     '''
     pass
-def SimPolicy(state, weights):
+def SimPolicy(state, **kwargs):
     '''
     ### Input: 
     #       Dictionary containing current space: {"x": x, "y": y}
@@ -202,29 +198,105 @@ def SimPolicy(state, weights):
     ### Output: Dictionary containing action: {"a": a, "z": z}
     ### Policy: Policy is based on Saure et al (2015)
     '''
-    pass
+    '''
+    ### Input: Dictionary containing current space: {"x": x, "y": y} & weights from the neural network
+    ### Output: Dictionary containing action: {"a": a, "z": z}
+    ### Policy: Policy uses Myopic cost and also an approximation of cost-to-go function. Approximation is done through a neural network
+    '''
+    # Initialize 
+    state = deepcopy(state)
+    weights=kwargs['kwargs']['weights']
+    model = Model()
+    model.Params.LogToConsole = 0
 
-def simulation(repl_i, warmup=500, duration=1500, debug=False, policy=MyopicPolicy, **kwargs):
+    # Variables
+    sx = model.addVars(N, vtype=GRB.INTEGER, lb=0, ub=cap, name='sx')
+    sy = model.addVars(P, vtype=GRB.INTEGER, lb=0, ub=15, name='sy')
+    aa = model.addVars(P, N, vtype=GRB.INTEGER, lb=0, name='aa')
+    az = model.addVars(P, vtype=GRB.INTEGER, lb=0, name='az')
+
+    # Post Decision State
+    sx_p = model.addVars(N, vtype=GRB.INTEGER, name='sxp')
+    sy_p = model.addVars(P, vtype=GRB.INTEGER, name='syp')
+    sx_p_tot = model.addVar(vtype=GRB.INTEGER, name='sxp_t')
+    sy_p_tot = model.addVar(vtype=GRB.INTEGER, name='syp_t')
+
+    # Linear Regression
+    pred_val = model.addVar(lb=-GRB.INFINITY, ub=GRB.INFINITY, name=f'cost-to-go')
+
+    # State Action Constraints
+    model.addConstrs( (sx[n] + quicksum(aa[(p,n)] for p in P) <= cap for n in N), name='c_cap')
+    model.addConstr( quicksum(az[p] for p in P) <= scap, name='c_scap')
+    model.addConstrs( (quicksum(aa[(p,n)] for n in N) + az[p] <= sy[p] for p in P), name='c_dem' )
+
+    # Post Decision State Definition
+    model.addConstrs( (sx_p[n] == sx[n] + quicksum( aa[(p,n)] for p in P ) for n in N), name='c_sxp')
+    model.addConstrs( ( sy_p[p] == sy[p] - quicksum( aa[(p,n)] for n in N ) - az[p] for p in P ), name='c_syp' )
+    model.addConstr( (sx_p_tot == quicksum (sx_p[n] for n in N) ), name='c_sxp_t' )
+    model.addConstr( (sy_p_tot == quicksum (sy_p[p] for p in P) ), name='c_syp_t' )
+
+    # Linear Regression Definition
+    model.addConstr(
+        pred_val == (
+            quicksum( weights[P.index(p)] * sy_p[p] for p in P ) +
+            quicksum( weights[n + len(P)] * sx_p[n] for n in N ) +
+            ( weights[-2] * sx_p_tot ) + 
+            ( weights[-1] * sy_p_tot )
+        ), name='def-cost-to-go'
+    )
+    
+    # Objective Function
+    model.setObjective((
+        quicksum(quicksum( aa[(p,n)] * book[(p,n)] for p in P) for n in N) + 
+        quicksum( az[p] * oc[p] for p in P) +
+        quicksum( (sy[p] - quicksum(aa[(p,n)] for n in N) - az[p]) * lb[p] for p in P) + 
+        gam * pred_val
+    ), GRB.MINIMIZE)
+
+    # Fix State Variables
+    for n in N: 
+        sx[n].LB = round(state['x'][n])
+        sx[n].UB = round(state['x'][n])
+    for p in P:
+        sy[p].LB = round(state['y'][p])
+        sy[p].UB = round(state['y'][p])
+
+    # Optimize
+    model.optimize()
+
+    # Generate Action
+    ac_a = {p:[aa[(p,n)].X for n in N] for p in P}
+    ac_z = {p:az[p].X for p in P}
+    action = {"a": ac_a, "z": ac_z}
+
+    # Return action
+    return(action)
+
+def simulation(repl_i, warmup=1000, duration=2000, debug=False, policy=MyopicPolicy, **kwargs):
     random_stream = np.random.RandomState(seed = repl_i)
     st_x = [min(random_stream.poisson(cap*(0.9)**n), cap) for n in N]
     st_y = {p:min(random_stream.poisson(dm[p]),dm[p]*5) for p in P}
     state = {'x': st_x, 'y': st_y}
     disc_cost = 0
+    avg_cost = 0
+    avg_iter = 0
 
     # Single Replication
     for day in range(duration):
 
         # generate action
-        if day < warmup:
-            action = MyopicPolicy(state)
-        else:
-            if kwargs: action = policy(state, kwargs = kwargs['kwargs'])
-            else: action = policy(state)
+        # if day < warmup:
+        #     action = MyopicPolicy(state)
+        # else:
+        if kwargs: action = policy(state, kwargs = kwargs['kwargs'])
+        else: action = policy(state)
         
         # generate cost
         if day >= warmup:
             cost = calculateCost(state, action)
             disc_cost = (disc_cost * gam) + cost
+            avg_cost += cost
+            avg_iter += 1
 
         if debug:
             print(f"\tDay {day+1} cost: {cost}, disc cost: {disc_cost}")
@@ -243,24 +315,45 @@ def simulation(repl_i, warmup=500, duration=1500, debug=False, policy=MyopicPoli
             if n != N[-1]: st_x[n] = st_x[n+1]
             else: st_x[n] = 0
 
-    return(disc_cost)
+    return(disc_cost, avg_cost/avg_iter)
 #endregion
 
 #region Simulation
-replications = [i for i in range(30)]
-fas_costs = []
-ppq_costs = []
+replications = [i for i in range(100)]
+
+fas_costs_dc = []
+fas_costs_avg = []
+
+# PPQ Betas
+with open('data/linear-betas.pickle', 'rb') as file:
+    PPQbetas = pickle.load(file)
+ppq_costs_dc = []
+ppq_costs_avg = []
+
+# Sim Weights
+with open('data/nn-weights.pickle', 'rb') as file:
+    sim_weights = pickle.load(file) 
+sim_costs_dc = []
+sim_costs_avg = []
+
 if __name__ == '__main__':
     pool = Pool(os.cpu_count())
     # FAS
-    for cost in tqdm(pool.imap_unordered(partial(simulation, policy=MyopicPolicy), replications), total=len(replications)):
-        fas_costs.append(cost)
+    for disc_cost, avg_cost in tqdm(pool.imap_unordered(partial(simulation, policy=MyopicPolicy), replications), total=len(replications)):
+        fas_costs_dc.append(disc_cost)
+        fas_costs_avg.append(avg_cost)
     # PPQ
-    for cost in tqdm(pool.imap_unordered(partial(simulation, policy=PPQPolicy, kwargs={'betas':PPQbetas}), replications), total=len(replications)):
-        ppq_costs.append(cost)
+    for disc_cost, avg_cost in tqdm(pool.imap_unordered(partial(simulation, policy=PPQPolicy, kwargs={'betas':PPQbetas}), replications), total=len(replications)):
+        ppq_costs_dc.append(disc_cost)
+        ppq_costs_avg.append(avg_cost)
+    # SIM-Optim
+    for disc_cost, avg_cost in tqdm(pool.imap_unordered(partial(simulation, policy=SimPolicy, kwargs={'weights':sim_weights}), replications), total=len(replications)):
+        sim_costs_dc.append(disc_cost)
+        sim_costs_avg.append(avg_cost)
     pool.terminate()
 
-    print(f"FAS Costs: {np.mean(fas_costs)}")
-    print(f"PPQ Costs: {np.mean(ppq_costs)}")
+    print(f"FAS Costs: {np.mean(fas_costs_avg)}")
+    print(f"PPQ Costs: {np.mean(ppq_costs_avg)}")
+    print(f"SimOptim Costs: {np.mean(sim_costs_avg)}")
 #endregion
 # %%
