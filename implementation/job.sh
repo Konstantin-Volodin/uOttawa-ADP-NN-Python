@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --time=02-00
-#SBATCH --cpus-per-task=44
+#SBATCH --cpus-per-task=32
 #SBATCH --nodes=1
 #SBATCH --mem=0
 #SBATCH --job-name=optimsim
