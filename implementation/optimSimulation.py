@@ -448,7 +448,7 @@ for dur_iter in durs:
             value_data = pd.concat([value_data, item])
         print(value_data)
         value_data.to_csv(f'data/simulation-value_{repl}_{warmup}_{duration}.csv', index=False)
-    comm.Barrier()
+    # comm.Barrier()
 
     # Fits a Predictive Model
 
