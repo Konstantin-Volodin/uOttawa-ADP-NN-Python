@@ -1,4 +1,3 @@
-#%%
 #region Load Modules
 
 from gurobipy import *
@@ -10,6 +9,7 @@ import pickle
 from copy import deepcopy
 from multiprocessing import Pool
 from functools import partial
+from mpi4py import MPI
 
 import tqdm
 from tqdm.keras import TqdmCallback
@@ -227,7 +227,7 @@ def simulation(state_i, repl, warmup, duration, weights):
 #endregion
 #region Optimization Functions
 
-def valueApprox(n_states, repl, warmup, duration, weights):
+def valueApprox(states_range, repl, warmup, duration, weights):
     '''
     # Inputs:
         n_states (int): number of states to generate a value approximation for
@@ -241,15 +241,17 @@ def valueApprox(n_states, repl, warmup, duration, weights):
     states = []
     disc_costs = []
     avg_costs = []
-    n_states_ran = [i for i in range(n_states)]
 
     if __name__ == '__main__':
-        pool = Pool(os.cpu_count())
-        for state, disc_cost, avg_cost in tqdm.tqdm(pool.imap_unordered(partial(simulation, repl=repl, warmup=warmup, duration=duration, weights=weights), n_states_ran), total=len(n_states_ran)):
+        # pool = Pool(os.cpu_count())
+        for state_iters in states_range:
+            state, disc_cost, avg_cost = simulation(state_i = state_iters, repl=repl, warmup=warmup, duration=duration, weights=weights)
+        # for state, disc_cost, avg_cost in tqdm.tqdm(pool.imap_unordered(partial(simulation, repl=repl, warmup=warmup, duration=duration, weights=weights), n_states_ran), total=len(n_states_ran)):
             states.append(state)
             disc_costs.append(disc_cost)
             avg_costs.append(avg_cost)
-        pool.close()
+            print(f'Process {rank} of {size} finished simulation {state_iters}')
+        # pool.close()
 
         # Convert States to Dataframe
         df = pd.DataFrame()
@@ -310,115 +312,179 @@ def fitNN(value_df):
 
 #endregion
 
-#%%
-#region Main Execution
+# Initialization
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+n_states = 1000
+repl = 100
+warmup = 100
+duration = 200
 
-#region Load & Prepare Data
+#region Prepare Data
 
-# load data
-my_path = os.getcwd()
-data_f = open(os.path.join(my_path, 'data','simple.json'))
-data = json.load(data_f)
-data_f.close()
+# Load Data
+if rank == 0:
+    my_path = os.getcwd()
+    data_f = open(os.path.join(my_path, 'data','simple.json'))
+    data = json.load(data_f)
+    data_f.close()
 
-# prepare data
-N = [i for i in range(int(data['index']['n']))]
-P = data['index']['p']
+    # prepare data
+    N = [i for i in range(int(data['index']['n']))]
+    P = data['index']['p']
 
-tg = {p:int(data['target'][p]) for p in P}
-dm = {p:int(data['demand'][p]) for p in P}
-cap = int(data['capacity'])
-scap = int(data['surge_capacity'])
-oc = {p:int(data['params']['oc'][p]) for p in P}
-lb = {p:int(data['params']['lb'][p]) for p in P}
-gam = float(data['params']['disc'])
+    tg = {p:int(data['target'][p]) for p in P}
+    dm = {p:int(data['demand'][p]) for p in P}
+    cap = int(data['capacity'])
+    scap = int(data['surge_capacity'])
+    oc = {p:int(data['params']['oc'][p]) for p in P}
+    lb = {p:int(data['params']['lb'][p]) for p in P}
+    gam = float(data['params']['disc'])
 
-# expected values
-E_x = [ (cap *(0.95**i)) for i in N]
-E_y = {p:dm[p] for p in P}
+    # booking cost
+    book = {(p,n):0 for p in P for n in N}
+    for p,n in itertools.product(P, N):
+        if (n+1) > tg[p]:
+            for k in range(0, (n+1) - tg[p]):
+                book[(p,n)] += (gam**k) * lb[p]
 
-# booking cost
-book = {(p,n):0 for p in P for n in N}
-for p,n in itertools.product(P, N):
-    if (n+1) > tg[p]:
-        for k in range(0, (n+1) - tg[p]):
-            book[(p,n)] += (gam**k) * lb[p]
+    # Neural Network Data
+    nn_layers = (len(N)+len(P)+2,     40,40,40,40,40,   1)
+    nn_weights = {}
+    for layer in range(len(nn_layers)-1):
+        ly = f"layer_{layer}"
+        nn_weights[ly] ={ "bias": [], "weights": [] }
 
-# Neural Network Data
-# nn_layers = (len(N)+len(P)+2,     40,40,40,40,40,   1)
-# nn_weights = {}
-# for layer in range(len(nn_layers)-1):
-#     ly = f"layer_{layer}"
-#     nn_weights[ly] ={ "bias": [], "weights": [] }
+        for out in range(nn_layers[layer+1]):
+            nn_weights[ly]["bias"].append(0)
+            
+        for inn in range(nn_layers[layer]):
+            nn_weights[ly]['weights'].append([])
+            for out in range(nn_layers[layer+1]):
+                nn_weights[ly]["weights"][inn].append(0)
 
-#     for out in range(nn_layers[layer+1]):
-#         nn_weights[ly]["bias"].append(0)
-        
-#     for inn in range(nn_layers[layer]):
-#         nn_weights[ly]['weights'].append([])
-#         for out in range(nn_layers[layer+1]):
-#             nn_weights[ly]["weights"][inn].append(0)
+    # Linear Regression Weights
+    reg_layers = (len(N)+len(P)+2)
+    reg_weights = [0 for it in range(reg_layers)]
+else:
+    # prepare data
+    N = None
+    P = None
 
-# Linear Regression Weights
-nn_layers = (len(N)+len(P)+2)
-nn_weights = [0 for it in range(nn_layers)]
+    tg = None
+    dm = None
+    cap = None
+    scap = None
+    oc = None
+    lb = None
+    gam = None
 
+    # expected values
+    E_x = None
+    E_y = None
 
+    # booking cost
+    book = None
+
+    # Neural Network Data
+    nn_layers = None
+    nn_weights = None
+
+    # Linear Regression Weights
+    reg_layers = None
+    reg_weights = None
+
+# BroadCast Data
+N = comm.bcast(N, root=0)
+P = comm.bcast(N, root=0)
+
+tg = comm.bcast(N, root=0)
+dm = comm.bcast(N, root=0)
+cap = comm.bcast(N, root=0)
+scap = comm.bcast(N, root=0)
+oc = comm.bcast(N, root=0)
+lb = comm.bcast(N, root=0)
+gam = comm.bcast(N, root=0)
+
+E_x = comm.bcast(E_x, root=0)
+E_y = comm.bcast(E_y, root=0)
+
+book = comm.bcast(book, root=0)
+
+nn_layers = comm.bcast(nn_layers, root=0)
+nn_weights = comm.bcast(nn_weights, root=0)
+
+reg_layers = comm.bcast(reg_layers, root=0)
+reg_weights = comm.bcast(reg_weights, root=0)
 #endregion
 
-if __name__ == '__main__':
+durs = [50+warmup, 100+warmup, 200+warmup, 400+warmup, 800+warmup]
+
+# Splits up iterations between each CPU
+if rank == 0:
+
+    # Splits up the Data into Sections
+    ave, res = divmod(n_states, size)
+    counts = [ave + 1 if p < res else ave for p in range(size)]
+
+    # determine the starting and ending indices of each sub-task
+    starts = [sum(counts[:p]) for p in range(size)]
+    ends = [sum(counts[:p+1]) for p in range(size)]
+
+    # converts data into a list of arrays 
+    iterable = [range(starts[p],ends[p]) for p in range(size)]
+else:
+    iterable = None
+
+iterable = comm.scatter(iterable, root=0)
+
+# Performs Simulation
+value_data = valueApprox(iterable, repl, warmup, duration, reg_weights)
+value_data = comm.gather(value_data, root=0)
+
+# Saves Data
+if rank == 0:
+    value_data.to_csv(f'data/simulation-value_{repl}_{warmup}_{duration}.csv', index=False)
+
+
+# warms = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+
+# for warm_i in warms:
+
+# for dur_i in durs:
+#     duration=dur_i
+    # warmup= warm_i
+#%% 
+# After the sensitivity analysis is done & simulation parameters are chosen - we will go through the optimization algortithm
+# value_data_tot = pd.DataFrame()
+# weights_list = []
+# average_cost_over_time = []
+# for i in range(50):
+    # print(f"Iteration: {i}")
     
-    # Initialization 
-    # n_states = 1000
-    # repl = 100
-    # warmup = 100
-    # duration = 300
-    n_states = 1000
-    repl = 100
-    warmup = 100
-    duration = 200
+    # Generate Simulation Estimates
+    # value_data = valueApprox(n_states, repl, warmup, duration, reg_weights)
+    # value_data.to_csv(f'data/simulation-value_{repl}_{warmup}_{duration}.csv', index=False)
+    # # average_cost_over_time.append(value_data['avg_cost'].mean())
 
-    # warms = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
-    durs = [50+warmup, 100+warmup, 200+warmup, 400+warmup, 800+warmup]
+    # # Fit Value Approximate Model
+    # value_data['x'] = 0
+    # for n in N: value_data['x'] += value_data[f'x_{n+1}'] 
+    # value_data['y'] = 0
+    # for p in P: value_data['y'] += value_data[f'y_{p}']
+    # # value_data_tot = pd.concat([value_data_tot, value_data])
+    # print(f"\tFitting Data")
+    # reg_weights = fitNN(value_data)
+    # # weights_list.append(nn_weights)
+
+    # # Save Data
+    # with open(f'data/sim-optim_{repl}_{warmup}_{duration}.pickle', 'wb') as file:
+    #     pickle.dump({'value': value_data['avg_cost'].mean(), 'weights': reg_weights}, file) 
+
+    # print(nn_weights)
+
+# print(f"improvement trajectory : {average_cost_over_time}")
+# print(f'Weights: {weights_list}')
+# value_data_tot.to_csv(f'data/simulation-value-1-total_{repl}_{warmup}_{duration}.csv', index=False)
     
-    # for warm_i in warms:
-
-    for dur_i in durs:
-        duration=dur_i
-        # warmup= warm_i
-    #%% 
-    # After the sensitivity analysis is done & simulation parameters are chosen - we will go through the optimization algortithm
-    # value_data_tot = pd.DataFrame()
-    # weights_list = []
-    # average_cost_over_time = []
-    # for i in range(50):
-        # print(f"Iteration: {i}")
-        
-        # Generate Simulation Estimates
-        value_data = valueApprox(n_states, repl, warmup, duration, nn_weights)
-        value_data.to_csv(f'data/simulation-value_{repl}_{warmup}_{duration}.csv', index=False)
-        # average_cost_over_time.append(value_data['avg_cost'].mean())
-
-        # Fit Value Approximate Model
-        value_data['x'] = 0
-        for n in N: value_data['x'] += value_data[f'x_{n+1}'] 
-        value_data['y'] = 0
-        for p in P: value_data['y'] += value_data[f'y_{p}']
-        # value_data_tot = pd.concat([value_data_tot, value_data])
-        print(f"\tFitting Data")
-        nn_weights = fitNN(value_data)
-        # weights_list.append(nn_weights)
-
-        # Save Data
-        with open(f'data/sim-optim_{repl}_{warmup}_{duration}.pickle', 'wb') as file:
-            pickle.dump({'value': value_data['avg_cost'].mean(), 'weights': nn_weights}, file) 
-
-        # print(nn_weights)
-
-    # print(f"improvement trajectory : {average_cost_over_time}")
-    # print(f'Weights: {weights_list}')
-    # value_data_tot.to_csv(f'data/simulation-value-1-total_{repl}_{warmup}_{duration}.csv', index=False)
-        
-#endregion
-
-    # %%
