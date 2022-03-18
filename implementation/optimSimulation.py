@@ -201,7 +201,7 @@ def simulation(state_i, repl, warmup, duration, weights):
             # Compute Cost
             if day >= warmup:
                 cost = calculateCost(state, action)
-                disc_cost = (disc_cost * gam) + cost
+                disc_cost += cost * (gam**(day-warmup))
                 avg_cost += cost
                 avg_iter += 1
 
@@ -375,21 +375,25 @@ if __name__ == '__main__':
     # duration = 300
     n_states = 1000
     repl = 100
-    warmup = 50
-    duration = 150
+    warmup = 100
+    duration = 200
+
+    durs = [50+warmup, 100+warmup, 200+warmup, 400+warmup, 800+warmup]
     
+    for dur_i in durs:
+        duration=dur_i
     #%% 
     # After the sensitivity analysis is done & simulation parameters are chosen - we will go through the optimization algortithm
-    value_data_tot = pd.DataFrame()
-    weights_list = []
-    average_cost_over_time = []
-    for i in range(50):
-        print(f"Iteration: {i}")
+    # value_data_tot = pd.DataFrame()
+    # weights_list = []
+    # average_cost_over_time = []
+    # for i in range(50):
+        # print(f"Iteration: {i}")
         
         # Generate Simulation Estimates
         value_data = valueApprox(n_states, repl, warmup, duration, nn_weights)
-        value_data.to_csv(f'data/simulation-value-1-iter{i}_{repl}_{warmup}_{duration}.csv', index=False)
-        average_cost_over_time.append(value_data['avg_cost'].mean())
+        value_data.to_csv(f'data/simulation-value_{repl}_{warmup}_{duration}.csv', index=False)
+        # average_cost_over_time.append(value_data['avg_cost'].mean())
 
         # Fit Value Approximate Model
         value_data['x'] = 0
@@ -399,17 +403,17 @@ if __name__ == '__main__':
         value_data_tot = pd.concat([value_data_tot, value_data])
         print(f"\tFitting Data")
         nn_weights = fitNN(value_data)
-        weights_list.append(nn_weights)
+        # weights_list.append(nn_weights)
 
         # Save Data
-        with open(f'data/sim-optim-1-iter{i}_{repl}_{warmup}_{duration}.pickle', 'wb') as file:
+        with open(f'data/sim-optim_{repl}_{warmup}_{duration}.pickle', 'wb') as file:
             pickle.dump({'value': value_data['avg_cost'].mean(), 'weights': nn_weights}, file) 
 
-        print(nn_weights)
+        # print(nn_weights)
 
-    print(f"improvement trajectory : {average_cost_over_time}")
-    print(f'Weights: {weights_list}')
-    value_data_tot.to_csv(f'data/simulation-value-1-total_{repl}_{warmup}_{duration}.csv', index=False)
+    # print(f"improvement trajectory : {average_cost_over_time}")
+    # print(f'Weights: {weights_list}')
+    # value_data_tot.to_csv(f'data/simulation-value-1-total_{repl}_{warmup}_{duration}.csv', index=False)
         
 #endregion
 

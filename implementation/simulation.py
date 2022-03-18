@@ -285,11 +285,11 @@ def simulation(repl_i, warmup=1000, duration=2000, debug=False, policy=MyopicPol
     for day in range(duration):
 
         # generate action
-        # if day < warmup:
-        #     action = MyopicPolicy(state)
-        # else:
-        if kwargs: action = policy(state, kwargs = kwargs['kwargs'])
-        else: action = policy(state)
+        if day < warmup:
+            action = MyopicPolicy(state)
+        else:   
+            if kwargs: action = policy(state, kwargs = kwargs['kwargs'])
+            else: action = policy(state)
         
         # generate cost
         if day >= warmup:
@@ -331,8 +331,9 @@ ppq_costs_dc = []
 ppq_costs_avg = []
 
 # Sim Weights
-with open('data/nn-weights.pickle', 'rb') as file:
+with open('data/sim-optim-1-iter15_100_50_150.pickle', 'rb') as file:
     sim_weights = pickle.load(file) 
+sim_weights = sim_weights['weights']
 sim_costs_dc = []
 sim_costs_avg = []
 
@@ -352,7 +353,7 @@ if __name__ == '__main__':
         sim_costs_avg.append(avg_cost)
     pool.terminate()
 
-    print(f"FAS Costs: {np.mean(fas_costs_avg)}")
+    print(f"Myopic Costs: {np.mean(fas_costs_avg)}")
     print(f"PPQ Costs: {np.mean(ppq_costs_avg)}")
     print(f"SimOptim Costs: {np.mean(sim_costs_avg)}")
 #endregion
