@@ -1,6 +1,9 @@
 # from mpi4py import MPI
+import ossaudiodev
+from re import L
 import time
 import tqdm
+import os
 from multiprocessing import Pool
 
 def test(iter):
@@ -10,18 +13,16 @@ def test(iter):
 
 if __name__ == "__main__":
     
+    for i in range(10):
+        print(f'This loop should only be done once {i}')
+
     n_iters = range(128*2)
-    pool = Pool(128)
+    pool_size = ossaudiodev.environ.get('$SLURM_NTASKS')
+    print(pool_size)
+    pool = Pool(pool_size)
     for i in tqdm.tqdm(pool.imap_unordered(test, n_iters), total=len(n_iters)):
         pass
     pool.close()
-
-
-    # world_comm = MPI.COMM_WORLD
-    # world_size = world_comm.Get_size()
-    # my_rank = world_comm.Get_rank()
-
     
-
-    # print(world_comm)
-    # print("World Size: " + str(world_size) + "   " + "Rank: " + str(my_rank))
+    for i in range(10):
+        print(f'This loop should only be done once {i}')

@@ -3,5 +3,5 @@
 #SBATCH --ntasks=128
 #SBATCH --mem-per-cpu=3G
 #SBATCH --job-name=testmpi
-#SBATCH --output=optim-mpi.out
+#SBATCH --output=mpi.out
 srun python3 mpi.py
