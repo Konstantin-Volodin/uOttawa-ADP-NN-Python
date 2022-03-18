@@ -316,10 +316,6 @@ def fitNN(value_df):
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
-n_states = 1000
-repl = 100
-warmup = 100
-duration = 200
 
 #region Prepare Data
 
@@ -380,10 +376,6 @@ else:
     lb = None
     gam = None
 
-    # expected values
-    E_x = None
-    E_y = None
-
     # booking cost
     book = None
 
@@ -407,9 +399,6 @@ oc = comm.bcast(N, root=0)
 lb = comm.bcast(N, root=0)
 gam = comm.bcast(N, root=0)
 
-E_x = comm.bcast(E_x, root=0)
-E_y = comm.bcast(E_y, root=0)
-
 book = comm.bcast(book, root=0)
 
 nn_layers = comm.bcast(nn_layers, root=0)
@@ -419,33 +408,40 @@ reg_layers = comm.bcast(reg_layers, root=0)
 reg_weights = comm.bcast(reg_weights, root=0)
 #endregion
 
+# Performs Simulation
+n_states = 1000
+repl = 100
+warmup = 100
+duration = 200
 durs = [50+warmup, 100+warmup, 200+warmup, 400+warmup, 800+warmup]
 
-# Splits up iterations between each CPU
-if rank == 0:
+for dur_iter in durs:
+    duration = dur_iter
 
-    # Splits up the Data into Sections
-    ave, res = divmod(n_states, size)
-    counts = [ave + 1 if p < res else ave for p in range(size)]
+    # Splits up iterations between each CPU
+    if rank == 0:
 
-    # determine the starting and ending indices of each sub-task
-    starts = [sum(counts[:p]) for p in range(size)]
-    ends = [sum(counts[:p+1]) for p in range(size)]
+        # Splits up the Data into Sections
+        ave, res = divmod(n_states, size)
+        counts = [ave + 1 if p < res else ave for p in range(size)]
 
-    # converts data into a list of arrays 
-    iterable = [range(starts[p],ends[p]) for p in range(size)]
-else:
-    iterable = None
+        # determine the starting and ending indices of each sub-task
+        starts = [sum(counts[:p]) for p in range(size)]
+        ends = [sum(counts[:p+1]) for p in range(size)]
 
-iterable = comm.scatter(iterable, root=0)
+        # converts data into a list of arrays 
+        iterable = [range(starts[p],ends[p]) for p in range(size)]
+    else:
+        iterable = None
+    iterable = comm.scatter(iterable, root=0)
 
-# Performs Simulation
-value_data = valueApprox(iterable, repl, warmup, duration, reg_weights)
-value_data = comm.gather(value_data, root=0)
+    # Performs Simulation
+    value_data = valueApprox(iterable, repl, warmup, duration, reg_weights)
+    value_data = comm.gather(value_data, root=0)
 
-# Saves Data
-if rank == 0:
-    value_data.to_csv(f'data/simulation-value_{repl}_{warmup}_{duration}.csv', index=False)
+    # Saves Data
+    if rank == 0:
+        value_data.to_csv(f'data/simulation-value_{repl}_{warmup}_{duration}.csv', index=False)
 
 
 # warms = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
