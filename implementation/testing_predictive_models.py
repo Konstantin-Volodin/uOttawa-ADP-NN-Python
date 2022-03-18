@@ -28,35 +28,35 @@ N = [i for i in range(int(data['index']['n']))]
 P = data['index']['p']
 
 # Load Data
-df_50_0_100 = pd.read_csv('data/simulation-value_50_0_100.csv')
-df_5_0_100 = pd.read_csv('data/simulation-value_5_0_100.csv')
-df_5_500_600 = pd.read_csv('data/simulation-value_5_500_600.csv')
-df_100_0_50 = pd.read_csv('data/simulation-value_100_0_50.csv')
-df_100_100_150 = pd.read_csv('data/simulation-value_100_100_150.csv')
-df_100_100_200 = pd.read_csv('data/simulation-value_100_100_200.csv')
-df_100_100_300 = pd.read_csv('data/simulation-value_100_100_300.csv')
-df_100_100_500 = pd.read_csv('data/simulation-value_100_100_500.csv')
-df_100_200_250 = pd.read_csv('data/simulation-value_100_200_250.csv')
-df_200_100_300 = pd.read_csv('data/simulation-value_200_100_300.csv')
+# df_50_0_100 = pd.read_csv('data/simulation-value_50_0_100.csv')
+# df_5_0_100 = pd.read_csv('data/simulation-value_5_0_100.csv')
+# df_5_500_600 = pd.read_csv('data/simulation-value_5_500_600.csv')
+# df_100_0_50 = pd.read_csv('data/simulation-value_100_0_50.csv')
+# df_100_100_150 = pd.read_csv('data/simulation-value_100_100_150.csv')
+# df_100_100_200 = pd.read_csv('data/simulation-value_100_100_200.csv')
+# df_100_100_300 = pd.read_csv('data/simulation-value_100_100_300.csv')
+# df_100_100_500 = pd.read_csv('data/simulation-value_100_100_500.csv')
+# df_100_200_250 = pd.read_csv('data/simulation-value_100_200_250.csv')
+# df_200_100_300 = pd.read_csv('data/simulation-value_200_100_300.csv')
 
 # Modify Data
-df_50_0_100['type'] = '50_0_100'
-df_5_0_100['type'] = '5_0_100'
-df_5_500_600['type'] = '5_500_600'
-df_100_0_50['type'] = '100_0_50'
-df_100_100_150['type'] = '100_100_150'
-df_100_100_200['type'] = '100_100_200'
-df_100_100_300['type'] = '100_100_300'
-df_100_100_500['type'] = '100_100_500'
-df_100_200_250['type'] = '100_200_250'
-df_200_100_300['type'] = '200_100_300'
+# df_50_0_100['type'] = '50_0_100'
+# df_5_0_100['type'] = '5_0_100'
+# df_5_500_600['type'] = '5_500_600'
+# df_100_0_50['type'] = '100_0_50'
+# df_100_100_150['type'] = '100_100_150'
+# df_100_100_200['type'] = '100_100_200'
+# df_100_100_300['type'] = '100_100_300'
+# df_100_100_500['type'] = '100_100_500'
+# df_100_200_250['type'] = '100_200_250'
+# df_200_100_300['type'] = '200_100_300'
 
 # Iterations
-df_iter = pd.DataFrame()
-for i in range(50):
-    df_new = pd.read_csv(f'data/simulation-value-1-iter{i}_100_50_150.csv')
-    df_new['type'] = f'{i}_100_50_150'
-    df_iter = pd.concat([df_iter, df_new])
+# df_iter = pd.DataFrame()
+# for i in range(50):
+#     df_new = pd.read_csv(f'data/simulation-value-1-iter{i}_100_50_150.csv')
+#     df_new['type'] = f'{i}_100_50_150'
+#     df_iter = pd.concat([df_iter, df_new])
 
 # %% Graph Data
 # Review Data
