@@ -166,7 +166,7 @@ def valueApprox(states_range, repl, warmup, duration):
         disc_costs.append(disc_cost)
         avg_costs.append(avg_cost)
         end_time = time.time()
-        print(f'Process {rank} of {size} finished simulation {state_iters} in {round(end_time-start_time,2)} seconds')
+        print(f'Process {rank} of {size} finished simulation {state_iters} in {round(end_time-start_time,2)} seconds for {repl}_{warmup}_{duration}')
     # pool.close()
 
     # Convert States to Dataframe
@@ -325,125 +325,126 @@ reg_weights = comm.bcast(reg_weights, root=0)
 
 # Performs Optimization
 n_states = 1000
-repl = 100
+repl = 300
 warmup = 50
 duration = 100
-# durs = [50+warmup, 100+warmup, 200+warmup, 400+warmup, 800+warmup]
+durs = [50+warmup, 100+warmup, 200+warmup, 400+warmup, 800+warmup]
 
-# for dur_iter in durs:
-    # duration = dur_iter
+for dur_iter in durs:
+    duration = dur_iter
 
     #region Splits up iterations between each CPU
-if rank == 0:
-    # Splits up the Data into Sections
-    ave, res = divmod(n_states, size)
-    counts = [ave + 1 if p < res else ave for p in range(size)]
+    if rank == 0:
+        # Splits up the Data into Sections
+        ave, res = divmod(n_states, size)
+        counts = [ave + 1 if p < res else ave for p in range(size)]
 
-    # determine the starting and ending indices of each sub-task
-    starts = [sum(counts[:p]) for p in range(size)]
-    ends = [sum(counts[:p+1]) for p in range(size)]
+        # determine the starting and ending indices of each sub-task
+        starts = [sum(counts[:p]) for p in range(size)]
+        ends = [sum(counts[:p+1]) for p in range(size)]
 
-    # converts data into a list of arrays 
-    iterable = [range(starts[p],ends[p]) for p in range(size)]
-else:
-    iterable = None
-iterable = comm.scatter(iterable, root=0)
-#endregion
-print(f'Process {rank} of {size} received {iterable} for {repl}_{warmup}_{duration}')
+        # converts data into a list of arrays 
+        iterable = [range(starts[p],ends[p]) for p in range(size)]
+    else:
+        iterable = None
+    iterable = comm.scatter(iterable, root=0)
+    #endregion
+    print(f'Process {rank} of {size} received {iterable} for {repl}_{warmup}_{duration}')
 
-#region Creates an optimization model
-model = Model()
-model.Params.LogToConsole = 0
+    #region Creates an optimization model
+    model = Model()
+    model.Params.LogToConsole = 0
 
-# Variables
-sx = model.addVars(N, vtype=GRB.INTEGER, lb=0, ub=cap, name='sx')
-sy = model.addVars(P, vtype=GRB.INTEGER, lb=0, ub=15, name='sy')
-aa = model.addVars(P, N, vtype=GRB.INTEGER, lb=0, name='aa')
-az = model.addVars(P, vtype=GRB.INTEGER, lb=0, name='az')
+    # Variables
+    sx = model.addVars(N, vtype=GRB.INTEGER, lb=0, ub=cap, name='sx')
+    sy = model.addVars(P, vtype=GRB.INTEGER, lb=0, ub=15, name='sy')
+    aa = model.addVars(P, N, vtype=GRB.INTEGER, lb=0, name='aa')
+    az = model.addVars(P, vtype=GRB.INTEGER, lb=0, name='az')
 
-# Post Decision State
-sx_p = model.addVars(N, vtype=GRB.INTEGER, name='sxp')
-sy_p = model.addVars(P, vtype=GRB.INTEGER, name='syp')
-sx_p_tot = model.addVar(vtype=GRB.INTEGER, name='sxp_t')
-sy_p_tot = model.addVar(vtype=GRB.INTEGER, name='syp_t')
+    # Post Decision State
+    sx_p = model.addVars(N, vtype=GRB.INTEGER, name='sxp')
+    sy_p = model.addVars(P, vtype=GRB.INTEGER, name='syp')
+    sx_p_tot = model.addVar(vtype=GRB.INTEGER, name='sxp_t')
+    sy_p_tot = model.addVar(vtype=GRB.INTEGER, name='syp_t')
 
-# Linear Regression
-pred_val = model.addVar(lb=-GRB.INFINITY, ub=GRB.INFINITY, name=f'cost-to-go')
+    # Linear Regression
+    pred_val = model.addVar(lb=-GRB.INFINITY, ub=GRB.INFINITY, name=f'cost-to-go')
 
-# # Neutrons & relu
-# vnn = []
-# vrl = []
-# for layer in range(len(nn_layers)-1):
-#     vnn.append(model.addVars(nn_layers[layer+1], lb=-GRB.INFINITY, ub=GRB.INFINITY, name=f'layer{layer}_neuron'))
-#     vrl.append(model.addVars(nn_layers[layer+1], name=f'layer{layer}_RELU'))
+    # # Neutrons & relu
+    # vnn = []
+    # vrl = []
+    # for layer in range(len(nn_layers)-1):
+    #     vnn.append(model.addVars(nn_layers[layer+1], lb=-GRB.INFINITY, ub=GRB.INFINITY, name=f'layer{layer}_neuron'))
+    #     vrl.append(model.addVars(nn_layers[layer+1], name=f'layer{layer}_RELU'))
 
-# State Action Constraints
-model.addConstrs( (sx[n] + quicksum(aa[(p,n)] for p in P) <= cap for n in N), name='c_cap')
-model.addConstr( quicksum(az[p] for p in P) <= scap, name='c_scap')
-model.addConstrs( (quicksum(aa[(p,n)] for n in N) + az[p] <= sy[p] for p in P), name='c_dem' )
+    # State Action Constraints
+    model.addConstrs( (sx[n] + quicksum(aa[(p,n)] for p in P) <= cap for n in N), name='c_cap')
+    model.addConstr( quicksum(az[p] for p in P) <= scap, name='c_scap')
+    model.addConstrs( (quicksum(aa[(p,n)] for n in N) + az[p] <= sy[p] for p in P), name='c_dem' )
 
-# Post Decision State Definition
-model.addConstrs( (sx_p[n] == sx[n] + quicksum( aa[(p,n)] for p in P ) for n in N), name='c_sxp')
-model.addConstrs( ( sy_p[p] == sy[p] - quicksum( aa[(p,n)] for n in N ) - az[p] for p in P ), name='c_syp' )
-model.addConstr( (sx_p_tot == quicksum (sx_p[n] for n in N) ), name='c_sxp_t' )
-model.addConstr( (sy_p_tot == quicksum (sy_p[p] for p in P) ), name='c_syp_t' )
+    # Post Decision State Definition
+    model.addConstrs( (sx_p[n] == sx[n] + quicksum( aa[(p,n)] for p in P ) for n in N), name='c_sxp')
+    model.addConstrs( ( sy_p[p] == sy[p] - quicksum( aa[(p,n)] for n in N ) - az[p] for p in P ), name='c_syp' )
+    model.addConstr( (sx_p_tot == quicksum (sx_p[n] for n in N) ), name='c_sxp_t' )
+    model.addConstr( (sy_p_tot == quicksum (sy_p[p] for p in P) ), name='c_syp_t' )
 
-# RELU Function Definition
-# for layer in range(len(nn_layers)-1):
-#     for nn_i in range(nn_layers[layer+1]):
-#         model.addConstr( vrl[layer][nn_i] == max_(vnn[layer][nn_i], constant=0), name=f'c_layer{layer}_RELU[{nn_i}]')
+    # RELU Function Definition
+    # for layer in range(len(nn_layers)-1):
+    #     for nn_i in range(nn_layers[layer+1]):
+    #         model.addConstr( vrl[layer][nn_i] == max_(vnn[layer][nn_i], constant=0), name=f'c_layer{layer}_RELU[{nn_i}]')
 
-# # Neuron Definition
-# for layer in range(len(nn_layers)-1):
-#     if layer == 0: 
-#         model.addConstrs((
-#             vnn[layer][out] == (
-#                 weights[f"layer_{layer}"]['bias'][out] +
-#                 quicksum( weights[f"layer_{layer}"]["weights"][P.index(p)][out] * sy_p[p] for p in P ) +
-#                 quicksum( weights[f"layer_{layer}"]["weights"][n + len(P)][out] * sx_p[n] for n in N ) +
-#                 ( weights[f"layer_{layer}"]["weights"][-2][out] * sx_p_tot ) + 
-#                 ( weights[f"layer_{layer}"]["weights"][-1][out] * sy_p_tot )
-#             ) for out in range(nn_layers[layer+1])
-#         ), name=f'c_layer{layer}_neuron')
-#     else:
-#         model.addConstrs((
-#             vnn[layer][out] == (
-#                 weights[f"layer_{layer}"]['bias'][out] +
-#                 quicksum( weights[f"layer_{layer}"]["weights"][inp][out] * vrl[layer-1][inp] for inp in range(nn_layers[layer]) ) 
-#             ) for out in range(nn_layers[layer+1])
-#         ), name=f'c_layer{layer}_neuron')
+    # # Neuron Definition
+    # for layer in range(len(nn_layers)-1):
+    #     if layer == 0: 
+    #         model.addConstrs((
+    #             vnn[layer][out] == (
+    #                 weights[f"layer_{layer}"]['bias'][out] +
+    #                 quicksum( weights[f"layer_{layer}"]["weights"][P.index(p)][out] * sy_p[p] for p in P ) +
+    #                 quicksum( weights[f"layer_{layer}"]["weights"][n + len(P)][out] * sx_p[n] for n in N ) +
+    #                 ( weights[f"layer_{layer}"]["weights"][-2][out] * sx_p_tot ) + 
+    #                 ( weights[f"layer_{layer}"]["weights"][-1][out] * sy_p_tot )
+    #             ) for out in range(nn_layers[layer+1])
+    #         ), name=f'c_layer{layer}_neuron')
+    #     else:
+    #         model.addConstrs((
+    #             vnn[layer][out] == (
+    #                 weights[f"layer_{layer}"]['bias'][out] +
+    #                 quicksum( weights[f"layer_{layer}"]["weights"][inp][out] * vrl[layer-1][inp] for inp in range(nn_layers[layer]) ) 
+    #             ) for out in range(nn_layers[layer+1])
+    #         ), name=f'c_layer{layer}_neuron')
 
-# Linear Regression Definition
-model.addConstr(
-    pred_val == (
-        quicksum( reg_weights[P.index(p)] * sy_p[p] for p in P ) +
-        quicksum( reg_weights[n + len(P)] * sx_p[n] for n in N ) +
-        ( reg_weights[-2] * sx_p_tot ) + 
-        ( reg_weights[-1] * sy_p_tot )
-    ), name='def-cost-to-go'
-)
+    # Linear Regression Definition
+    model.addConstr(
+        pred_val == (
+            quicksum( reg_weights[P.index(p)] * sy_p[p] for p in P ) +
+            quicksum( reg_weights[n + len(P)] * sx_p[n] for n in N ) +
+            ( reg_weights[-2] * sx_p_tot ) + 
+            ( reg_weights[-1] * sy_p_tot )
+        ), name='def-cost-to-go'
+    )
 
-# Objective Function
-model.setObjective((
-    quicksum(quicksum( aa[(p,n)] * book[(p,n)] for p in P) for n in N) + 
-    quicksum( az[p] * oc[p] for p in P) +
-    quicksum( (sy[p] - quicksum(aa[(p,n)] for n in N) - az[p]) * lb[p] for p in P) + 
-    gam * pred_val
-    # gam * vrl[-1][0]
-), GRB.MINIMIZE)
-#endregion
+    # Objective Function
+    model.setObjective((
+        quicksum(quicksum( aa[(p,n)] * book[(p,n)] for p in P) for n in N) + 
+        quicksum( az[p] * oc[p] for p in P) +
+        quicksum( (sy[p] - quicksum(aa[(p,n)] for n in N) - az[p]) * lb[p] for p in P) + 
+        gam * pred_val
+        # gam * vrl[-1][0]
+    ), GRB.MINIMIZE)
+    #endregion
 
-# Performs Simulation
-val_portion = valueApprox(iterable, repl, warmup, duration)
-val_portion = comm.gather(val_portion, root=0)
+    # Performs Simulation
+    val_portion = valueApprox(iterable, repl, warmup, duration)
+    val_portion = comm.gather(val_portion, root=0)
 
-# Saves Simulation Data
-if rank == 0:
-    value_data = pd.DataFrame()
-    for item in val_portion:
-        value_data = pd.concat([value_data, item])
-    print(value_data)
-    value_data.to_csv(f'data/simulation-value_{repl}_{warmup}_{duration}.csv', index=False)
+    # Saves Simulation Data
+    if rank == 0:
+        value_data = pd.DataFrame()
+        for item in val_portion:
+            value_data = pd.concat([value_data, item])
+        print(value_data)
+        value_data.to_csv(f'data/simulation-value_{repl}_{warmup}_{duration}.csv', index=False)
+    comm.Barrier()
 
     # Fits a Predictive Model
 
