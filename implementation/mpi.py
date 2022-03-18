@@ -17,7 +17,7 @@ if __name__ == "__main__":
         print(f'This loop should only be done once {i}')
 
     n_iters = range(128*2)
-    pool_size = os.environ.get('$SLURM_NTASKS')
+    pool_size = os.environ.get('SLURM_NTASKS')
     print(pool_size)
     pool = Pool(pool_size)
     for i in tqdm.tqdm(pool.imap_unordered(test, n_iters), total=len(n_iters)):
