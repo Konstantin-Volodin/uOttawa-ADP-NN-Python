@@ -439,7 +439,7 @@ for dur_iter in durs:
     # Performs Simulation
     val_portion = valueApprox(iterable, repl, warmup, duration)
     val_portion = comm.gather(val_portion, root=0)
-    comm.Barrier()
+    # comm.Barrier()
 
     # Saves Simulation Data
     if rank == 0:
