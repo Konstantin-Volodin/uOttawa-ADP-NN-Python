@@ -7,10 +7,10 @@ import os
 from multiprocessing import Pool
 import numpy as np
 
-def test(iter):
-    print(f'Start {iter} at {time.time()}')
+def test(iter, rank, size):
+    print(f'Start {iter} at {time.time()} on {rank} of {size}')
     time.sleep(1)
-    print(f'End {iter} at {time.time()}')
+    print(f'End {iter} at {time.time()} on {rank} of {size}')
 
 if __name__ == "__main__":
     
@@ -21,7 +21,6 @@ if __name__ == "__main__":
     size = comm.Get_size()
 
     print('Hello from process {} out of {}'.format(rank, size))
-
 
     if rank == 0:
         data = np.arange(4.0)
@@ -35,5 +34,5 @@ if __name__ == "__main__":
     else:
         print('Process {} received data:'.format(rank), data)
     
-    for i in range(10):
-        print(f'This end loop should only be done once {i}')
+    # for i in range(10):
+    #     print(f'This end loop should only be done once {i}')
