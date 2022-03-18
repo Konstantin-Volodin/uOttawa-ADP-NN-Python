@@ -329,11 +329,12 @@ reg_weights = comm.bcast(reg_weights, root=0)
 n_states = 256*4
 repl = 100
 warmup = 50
-duration = 100
-durs = [50+warmup, 100+warmup, 200+warmup, 400+warmup, 800+warmup]
+duration = 400
+wamrups = [0,1,2,3,4,5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
 
-for dur_iter in durs:
-    duration = dur_iter
+for warm_iter in wamrups:
+    warmup = warm_iter
+    duration = warmup + 400
 
     #region Splits up iterations between each CPU
     if rank == 0:

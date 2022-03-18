@@ -28,28 +28,18 @@ N = [i for i in range(int(data['index']['n']))]
 P = data['index']['p']
 
 # Load Data
-# df_50_0_100 = pd.read_csv('data/simulation-value_50_0_100.csv')
-# df_5_0_100 = pd.read_csv('data/simulation-value_5_0_100.csv')
-# df_5_500_600 = pd.read_csv('data/simulation-value_5_500_600.csv')
-# df_100_0_50 = pd.read_csv('data/simulation-value_100_0_50.csv')
-# df_100_100_150 = pd.read_csv('data/simulation-value_100_100_150.csv')
-# df_100_100_200 = pd.read_csv('data/simulation-value_100_100_200.csv')
-# df_100_100_300 = pd.read_csv('data/simulation-value_100_100_300.csv')
-# df_100_100_500 = pd.read_csv('data/simulation-value_100_100_500.csv')
-# df_100_200_250 = pd.read_csv('data/simulation-value_100_200_250.csv')
-# df_200_100_300 = pd.read_csv('data/simulation-value_200_100_300.csv')
+df_100_50_100 = pd.read_csv('data/simulation-value_100_50_100.csv')
+df_100_50_150 = pd.read_csv('data/simulation-value_100_50_150.csv')
+df_100_50_250 = pd.read_csv('data/simulation-value_100_50_250.csv')
+df_100_50_450 = pd.read_csv('data/simulation-value_100_50_450.csv')
+df_100_50_850 = pd.read_csv('data/simulation-value_100_50_850.csv')
 
 # Modify Data
-# df_50_0_100['type'] = '50_0_100'
-# df_5_0_100['type'] = '5_0_100'
-# df_5_500_600['type'] = '5_500_600'
-# df_100_0_50['type'] = '100_0_50'
-# df_100_100_150['type'] = '100_100_150'
-# df_100_100_200['type'] = '100_100_200'
-# df_100_100_300['type'] = '100_100_300'
-# df_100_100_500['type'] = '100_100_500'
-# df_100_200_250['type'] = '100_200_250'
-# df_200_100_300['type'] = '200_100_300'
+df_100_50_100['type'] = '100_50_100'
+df_100_50_150['type'] = '100_50_150'
+df_100_50_250['type'] = '100_50_250'
+df_100_50_450['type'] = '100_50_450'
+df_100_50_850['type'] = '100_50_850'
 
 # Iterations
 # df_iter = pd.DataFrame()
@@ -60,8 +50,8 @@ P = data['index']['p']
 
 # %% Graph Data
 # Review Data
-df_tot = pd.concat([df_100_0_50, df_100_100_150, df_100_200_250])
-df_tot = df_iter
+df_tot = pd.concat([df_100_50_100, df_100_50_150, df_100_50_250, df_100_50_450, df_100_50_850])
+# df_tot = df_iter
 df_tot['x'] = 0
 for n in N: df_tot['x'] += df_tot[f'x_{n+1}']
 df_tot['y'] = 0
