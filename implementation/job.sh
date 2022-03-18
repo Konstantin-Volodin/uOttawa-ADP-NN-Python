@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=00:30:00
+#SBATCH --time=01-00
 #SBATCH --ntasks=250
 #SBATCH --mem-per-cpu=4G
 #SBATCH --job-name=optimsim

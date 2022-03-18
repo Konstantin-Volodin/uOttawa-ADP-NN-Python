@@ -12,6 +12,7 @@ from multiprocessing import Pool
 from functools import partial
 from mpi4py import MPI
 import time
+import sys
 
 import tqdm
 from tqdm.keras import TqdmCallback
@@ -167,6 +168,7 @@ def valueApprox(states_range, repl, warmup, duration):
         avg_costs.append(avg_cost)
         end_time = time.time()
         print(f'Process {rank} of {size} finished simulation {state_iters} in {round(end_time-start_time,2)} seconds for {repl}_{warmup}_{duration}')
+        sys.stdout.flush()
     # pool.close()
 
     # Convert States to Dataframe
@@ -325,7 +327,7 @@ reg_weights = comm.bcast(reg_weights, root=0)
 
 # Performs Optimization
 n_states = 1000
-repl = 300
+repl = 100
 warmup = 50
 duration = 100
 durs = [50+warmup, 100+warmup, 200+warmup, 400+warmup, 800+warmup]
@@ -350,6 +352,7 @@ for dur_iter in durs:
     iterable = comm.scatter(iterable, root=0)
     #endregion
     print(f'Process {rank} of {size} received {iterable} for {repl}_{warmup}_{duration}')
+    sys.stdout.flush()
 
     #region Creates an optimization model
     model = Model()
@@ -436,6 +439,7 @@ for dur_iter in durs:
     # Performs Simulation
     val_portion = valueApprox(iterable, repl, warmup, duration)
     val_portion = comm.gather(val_portion, root=0)
+    comm.Barrier()
 
     # Saves Simulation Data
     if rank == 0:
