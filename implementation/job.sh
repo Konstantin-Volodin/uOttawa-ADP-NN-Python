@@ -1,8 +1,7 @@
 #!/bin/bash
-#SBATCH --time=02-00
-#SBATCH --cpus-per-task=64
-#SBATCH --nodes=1
-#SBATCH --mem=0
+#SBATCH --time=01:00:00
+#SBATCH --cpus-per-task=250
+#SBATCH --mem=3gb
 #SBATCH --job-name=optimsim
-#SBATCH --output=optim-optimsim.out
+#SBATCH --output=optimsim.out
 python3 optimSimulation.py
