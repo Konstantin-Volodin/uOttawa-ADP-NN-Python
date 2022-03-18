@@ -412,7 +412,7 @@ reg_layers = comm.bcast(reg_layers, root=0)
 reg_weights = comm.bcast(reg_weights, root=0)
 #endregion
 
-# Performs Simulation
+# Performs Optimization
 n_states = 1000
 repl = 100
 warmup = 100
@@ -424,7 +424,6 @@ for dur_iter in durs:
 
     # Splits up iterations between each CPU
     if rank == 0:
-
         # Splits up the Data into Sections
         ave, res = divmod(n_states, size)
         counts = [ave + 1 if p < res else ave for p in range(size)]
@@ -443,9 +442,13 @@ for dur_iter in durs:
     value_data = valueApprox(iterable, repl, warmup, duration, reg_weights)
     value_data = comm.gather(value_data, root=0)
 
-    # Saves Data
+    # Saves Simulation Data
     if rank == 0:
         value_data.to_csv(f'data/simulation-value_{repl}_{warmup}_{duration}.csv', index=False)
+
+    # Fits a Predictive Model
+
+    # Saves Predictive Model
 
 
 # warms = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
