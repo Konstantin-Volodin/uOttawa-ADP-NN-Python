@@ -438,13 +438,17 @@ for dur_iter in durs:
         iterable = None
     iterable = comm.scatter(iterable, root=0)
 
-    # Performs Simulation
-    value_data = valueApprox(iterable, repl, warmup, duration, reg_weights)
-    value_data = comm.gather(value_data, root=0)
+    print(f'Process {rank} of {size} received {iterable}')
 
-    # Saves Simulation Data
-    if rank == 0:
-        value_data.to_csv(f'data/simulation-value_{repl}_{warmup}_{duration}.csv', index=False)
+    # Creates an optimization model
+
+    # Performs Simulation
+    # value_data = valueApprox(iterable, repl, warmup, duration, reg_weights)
+    # value_data = comm.gather(value_data, root=0)
+
+    # # Saves Simulation Data
+    # if rank == 0:
+    #     value_data.to_csv(f'data/simulation-value_{repl}_{warmup}_{duration}.csv', index=False)
 
     # Fits a Predictive Model
 
