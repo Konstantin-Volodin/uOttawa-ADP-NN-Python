@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --time=00:01:00
 #SBATCH --ntasks=128
-#SBATCH --nodes=2
+#SBATCH --nodes=4
 #SBATCH --mem=0
 #SBATCH --job-name=testmpi
 #SBATCH --output=optim-mpi.out
