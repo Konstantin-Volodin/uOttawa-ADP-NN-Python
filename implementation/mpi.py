@@ -6,4 +6,5 @@ if __name__ == "__main__":
     world_size = world_comm.Get_size()
     my_rank = world_comm.Get_rank()
 
+    print(world_comm)
     print("World Size: " + str(world_size) + "   " + "Rank: " + str(my_rank))

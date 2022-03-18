@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --time=00:01:00
-#SBATCH --cpus-per-task=128
+#SBATCH --ntasks=128
 #SBATCH --nodes=2
 #SBATCH --mem=0
 #SBATCH --job-name=testmpi
