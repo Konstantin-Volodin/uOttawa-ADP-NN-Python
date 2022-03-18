@@ -324,10 +324,10 @@ reg_weights = comm.bcast(reg_weights, root=0)
 #endregion
 
 # Performs Optimization
-n_states = 30
-repl = 10
-warmup = 10
-duration = 20
+n_states = 1000
+repl = 100
+warmup = 50
+duration = 100
 # durs = [50+warmup, 100+warmup, 200+warmup, 400+warmup, 800+warmup]
 
 # for dur_iter in durs:
