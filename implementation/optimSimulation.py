@@ -404,7 +404,7 @@ if __name__ == '__main__':
             for n in N: value_data['x'] += value_data[f'x_{n+1}'] 
             value_data['y'] = 0
             for p in P: value_data['y'] += value_data[f'y_{p}']
-            value_data_tot = pd.concat([value_data_tot, value_data])
+            # value_data_tot = pd.concat([value_data_tot, value_data])
             print(f"\tFitting Data")
             nn_weights = fitNN(value_data)
             # weights_list.append(nn_weights)
