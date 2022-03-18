@@ -4,4 +4,4 @@
 #SBATCH --mem=3gb
 #SBATCH --job-name=optimsim
 #SBATCH --output=optimsim.out
-python3 optimSimulation.py
+srun optimSimulation.py
