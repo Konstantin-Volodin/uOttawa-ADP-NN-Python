@@ -45,98 +45,12 @@ def calculateCost(state, action):
         cost += lb[p] * (state['y'][p] - sum(action['a'][p]) - action['z'][p])
 
     return cost
-def SimPolicy(state, weights):
+def SimPolicy(state):
     '''
     ### Input: Dictionary containing current space: {"x": x, "y": y} & weights from the neural network
     ### Output: Dictionary containing action: {"a": a, "z": z}
     ### Policy: Policy uses Myopic cost and also an approximation of cost-to-go function. Approximation is done through a neural network
     '''
-    # weights = nn_weights
-    # print(weights)
-
-    # initialize model
-    model = Model()
-    model.Params.LogToConsole = 0
-
-    # Variables
-    sx = model.addVars(N, vtype=GRB.INTEGER, lb=0, ub=cap, name='sx')
-    sy = model.addVars(P, vtype=GRB.INTEGER, lb=0, ub=15, name='sy')
-    aa = model.addVars(P, N, vtype=GRB.INTEGER, lb=0, name='aa')
-    az = model.addVars(P, vtype=GRB.INTEGER, lb=0, name='az')
-
-    # Post Decision State
-    sx_p = model.addVars(N, vtype=GRB.INTEGER, name='sxp')
-    sy_p = model.addVars(P, vtype=GRB.INTEGER, name='syp')
-    sx_p_tot = model.addVar(vtype=GRB.INTEGER, name='sxp_t')
-    sy_p_tot = model.addVar(vtype=GRB.INTEGER, name='syp_t')
-
-    # Linear Regression
-    pred_val = model.addVar(lb=-GRB.INFINITY, ub=GRB.INFINITY, name=f'cost-to-go')
-
-    # # Neutrons & relu
-    # vnn = []
-    # vrl = []
-    # for layer in range(len(nn_layers)-1):
-    #     vnn.append(model.addVars(nn_layers[layer+1], lb=-GRB.INFINITY, ub=GRB.INFINITY, name=f'layer{layer}_neuron'))
-    #     vrl.append(model.addVars(nn_layers[layer+1], name=f'layer{layer}_RELU'))
-
-    # State Action Constraints
-    model.addConstrs( (sx[n] + quicksum(aa[(p,n)] for p in P) <= cap for n in N), name='c_cap')
-    model.addConstr( quicksum(az[p] for p in P) <= scap, name='c_scap')
-    model.addConstrs( (quicksum(aa[(p,n)] for n in N) + az[p] <= sy[p] for p in P), name='c_dem' )
-
-    # Post Decision State Definition
-    model.addConstrs( (sx_p[n] == sx[n] + quicksum( aa[(p,n)] for p in P ) for n in N), name='c_sxp')
-    model.addConstrs( ( sy_p[p] == sy[p] - quicksum( aa[(p,n)] for n in N ) - az[p] for p in P ), name='c_syp' )
-    model.addConstr( (sx_p_tot == quicksum (sx_p[n] for n in N) ), name='c_sxp_t' )
-    model.addConstr( (sy_p_tot == quicksum (sy_p[p] for p in P) ), name='c_syp_t' )
-
-    # RELU Function Definition
-    # for layer in range(len(nn_layers)-1):
-    #     for nn_i in range(nn_layers[layer+1]):
-    #         model.addConstr( vrl[layer][nn_i] == max_(vnn[layer][nn_i], constant=0), name=f'c_layer{layer}_RELU[{nn_i}]')
-
-    # # Neuron Definition
-    # for layer in range(len(nn_layers)-1):
-    #     if layer == 0: 
-    #         model.addConstrs((
-    #             vnn[layer][out] == (
-    #                 weights[f"layer_{layer}"]['bias'][out] +
-    #                 quicksum( weights[f"layer_{layer}"]["weights"][P.index(p)][out] * sy_p[p] for p in P ) +
-    #                 quicksum( weights[f"layer_{layer}"]["weights"][n + len(P)][out] * sx_p[n] for n in N ) +
-    #                 ( weights[f"layer_{layer}"]["weights"][-2][out] * sx_p_tot ) + 
-    #                 ( weights[f"layer_{layer}"]["weights"][-1][out] * sy_p_tot )
-    #             ) for out in range(nn_layers[layer+1])
-    #         ), name=f'c_layer{layer}_neuron')
-    #     else:
-    #         model.addConstrs((
-    #             vnn[layer][out] == (
-    #                 weights[f"layer_{layer}"]['bias'][out] +
-    #                 quicksum( weights[f"layer_{layer}"]["weights"][inp][out] * vrl[layer-1][inp] for inp in range(nn_layers[layer]) ) 
-    #             ) for out in range(nn_layers[layer+1])
-    #         ), name=f'c_layer{layer}_neuron')
-
-    # Linear Regression Definition
-    model.addConstr(
-        pred_val == (
-            quicksum( weights[P.index(p)] * sy_p[p] for p in P ) +
-            quicksum( weights[n + len(P)] * sx_p[n] for n in N ) +
-            ( weights[-2] * sx_p_tot ) + 
-            ( weights[-1] * sy_p_tot )
-        ), name='def-cost-to-go'
-    )
-    
-
-    # Objective Function
-    model.setObjective((
-        quicksum(quicksum( aa[(p,n)] * book[(p,n)] for p in P) for n in N) + 
-        quicksum( az[p] * oc[p] for p in P) +
-        quicksum( (sy[p] - quicksum(aa[(p,n)] for n in N) - az[p]) * lb[p] for p in P) + 
-        gam * pred_val
-        # gam * vrl[-1][0]
-    ), GRB.MINIMIZE)
-
-
     # Fix State Variables
     for n in N: 
         sx[n].LB = round(state['x'][n])
@@ -147,9 +61,6 @@ def SimPolicy(state, weights):
 
     # Optimize
     model.optimize()
-    # print(weights)
-    # print(nn_weights)
-    # print(pred_val.X, end=' ')
 
     # If unable to optimize - save the model
     try:
@@ -169,7 +80,7 @@ def SimPolicy(state, weights):
 
     # Return action
     return(action)
-def simulation(state_i, repl, warmup, duration, weights):
+def simulation(state_i, repl, warmup, duration):
     '''
     # Description:
         Estimates a long term discounted cost & average cost for a single input state
@@ -199,7 +110,7 @@ def simulation(state_i, repl, warmup, duration, weights):
                 random_stream = np.random.RandomState(seed = ((state_i*repl*2) + (rep+1)))
                 
             # generate action
-            action = SimPolicy(state, weights)
+            action = SimPolicy(state)
 
             # Compute Cost
             if day >= warmup:
@@ -230,7 +141,7 @@ def simulation(state_i, repl, warmup, duration, weights):
 #endregion
 #region Optimization Functions
 
-def valueApprox(states_range, repl, warmup, duration, weights):
+def valueApprox(states_range, repl, warmup, duration):
     '''
     # Inputs:
         n_states (int): number of states to generate a value approximation for
@@ -249,7 +160,7 @@ def valueApprox(states_range, repl, warmup, duration, weights):
     # pool = Pool(os.cpu_count())
     for state_iters in states_range:
         start_time = time.time()
-        state, disc_cost, avg_cost = simulation(state_i = state_iters, repl=repl, warmup=warmup, duration=duration, weights=weights)
+        state, disc_cost, avg_cost = simulation(state_i = state_iters, repl=repl, warmup=warmup, duration=duration)
     # for state, disc_cost, avg_cost in tqdm.tqdm(pool.imap_unordered(partial(simulation, repl=repl, warmup=warmup, duration=duration, weights=weights), n_states_ran), total=len(n_states_ran)):
         states.append(state)
         disc_costs.append(disc_cost)
@@ -391,7 +302,7 @@ else:
     reg_layers = None
     reg_weights = None
 
-# BroadCast Data
+# Broadcast Data
 N = comm.bcast(N, root=0)
 P = comm.bcast(P, root=0)
 
@@ -413,7 +324,7 @@ reg_weights = comm.bcast(reg_weights, root=0)
 #endregion
 
 # Performs Optimization
-n_states = 1000
+n_states = 30
 repl = 100
 warmup = 100
 duration = 200
@@ -422,7 +333,7 @@ durs = [50+warmup, 100+warmup, 200+warmup, 400+warmup, 800+warmup]
 for dur_iter in durs:
     duration = dur_iter
 
-    # Splits up iterations between each CPU
+    #region Splits up iterations between each CPU
     if rank == 0:
         # Splits up the Data into Sections
         ave, res = divmod(n_states, size)
@@ -437,14 +348,95 @@ for dur_iter in durs:
     else:
         iterable = None
     iterable = comm.scatter(iterable, root=0)
+    #endregion
+    print(f'Process {rank} of {size} received {iterable} for {repl}_{warmup}_{duration}')
 
-    print(f'Process {rank} of {size} received {iterable}')
+    #region Creates an optimization model
+    model = Model()
+    model.Params.LogToConsole = 0
 
-    # Creates an optimization model
+    # Variables
+    sx = model.addVars(N, vtype=GRB.INTEGER, lb=0, ub=cap, name='sx')
+    sy = model.addVars(P, vtype=GRB.INTEGER, lb=0, ub=15, name='sy')
+    aa = model.addVars(P, N, vtype=GRB.INTEGER, lb=0, name='aa')
+    az = model.addVars(P, vtype=GRB.INTEGER, lb=0, name='az')
+
+    # Post Decision State
+    sx_p = model.addVars(N, vtype=GRB.INTEGER, name='sxp')
+    sy_p = model.addVars(P, vtype=GRB.INTEGER, name='syp')
+    sx_p_tot = model.addVar(vtype=GRB.INTEGER, name='sxp_t')
+    sy_p_tot = model.addVar(vtype=GRB.INTEGER, name='syp_t')
+
+    # Linear Regression
+    pred_val = model.addVar(lb=-GRB.INFINITY, ub=GRB.INFINITY, name=f'cost-to-go')
+
+    # # Neutrons & relu
+    # vnn = []
+    # vrl = []
+    # for layer in range(len(nn_layers)-1):
+    #     vnn.append(model.addVars(nn_layers[layer+1], lb=-GRB.INFINITY, ub=GRB.INFINITY, name=f'layer{layer}_neuron'))
+    #     vrl.append(model.addVars(nn_layers[layer+1], name=f'layer{layer}_RELU'))
+
+    # State Action Constraints
+    model.addConstrs( (sx[n] + quicksum(aa[(p,n)] for p in P) <= cap for n in N), name='c_cap')
+    model.addConstr( quicksum(az[p] for p in P) <= scap, name='c_scap')
+    model.addConstrs( (quicksum(aa[(p,n)] for n in N) + az[p] <= sy[p] for p in P), name='c_dem' )
+
+    # Post Decision State Definition
+    model.addConstrs( (sx_p[n] == sx[n] + quicksum( aa[(p,n)] for p in P ) for n in N), name='c_sxp')
+    model.addConstrs( ( sy_p[p] == sy[p] - quicksum( aa[(p,n)] for n in N ) - az[p] for p in P ), name='c_syp' )
+    model.addConstr( (sx_p_tot == quicksum (sx_p[n] for n in N) ), name='c_sxp_t' )
+    model.addConstr( (sy_p_tot == quicksum (sy_p[p] for p in P) ), name='c_syp_t' )
+
+    # RELU Function Definition
+    # for layer in range(len(nn_layers)-1):
+    #     for nn_i in range(nn_layers[layer+1]):
+    #         model.addConstr( vrl[layer][nn_i] == max_(vnn[layer][nn_i], constant=0), name=f'c_layer{layer}_RELU[{nn_i}]')
+
+    # # Neuron Definition
+    # for layer in range(len(nn_layers)-1):
+    #     if layer == 0: 
+    #         model.addConstrs((
+    #             vnn[layer][out] == (
+    #                 weights[f"layer_{layer}"]['bias'][out] +
+    #                 quicksum( weights[f"layer_{layer}"]["weights"][P.index(p)][out] * sy_p[p] for p in P ) +
+    #                 quicksum( weights[f"layer_{layer}"]["weights"][n + len(P)][out] * sx_p[n] for n in N ) +
+    #                 ( weights[f"layer_{layer}"]["weights"][-2][out] * sx_p_tot ) + 
+    #                 ( weights[f"layer_{layer}"]["weights"][-1][out] * sy_p_tot )
+    #             ) for out in range(nn_layers[layer+1])
+    #         ), name=f'c_layer{layer}_neuron')
+    #     else:
+    #         model.addConstrs((
+    #             vnn[layer][out] == (
+    #                 weights[f"layer_{layer}"]['bias'][out] +
+    #                 quicksum( weights[f"layer_{layer}"]["weights"][inp][out] * vrl[layer-1][inp] for inp in range(nn_layers[layer]) ) 
+    #             ) for out in range(nn_layers[layer+1])
+    #         ), name=f'c_layer{layer}_neuron')
+
+    # Linear Regression Definition
+    model.addConstr(
+        pred_val == (
+            quicksum( reg_weights[P.index(p)] * sy_p[p] for p in P ) +
+            quicksum( reg_weights[n + len(P)] * sx_p[n] for n in N ) +
+            ( reg_weights[-2] * sx_p_tot ) + 
+            ( reg_weights[-1] * sy_p_tot )
+        ), name='def-cost-to-go'
+    )
+    
+    # Objective Function
+    model.setObjective((
+        quicksum(quicksum( aa[(p,n)] * book[(p,n)] for p in P) for n in N) + 
+        quicksum( az[p] * oc[p] for p in P) +
+        quicksum( (sy[p] - quicksum(aa[(p,n)] for n in N) - az[p]) * lb[p] for p in P) + 
+        gam * pred_val
+        # gam * vrl[-1][0]
+    ), GRB.MINIMIZE)
+    #endregion
 
     # Performs Simulation
-    # value_data = valueApprox(iterable, repl, warmup, duration, reg_weights)
-    # value_data = comm.gather(value_data, root=0)
+    value_data = valueApprox(iterable, repl, warmup, duration)
+    value_data = comm.gather(value_data, root=0)
+    print(value_data)
 
     # # Saves Simulation Data
     # if rank == 0:
