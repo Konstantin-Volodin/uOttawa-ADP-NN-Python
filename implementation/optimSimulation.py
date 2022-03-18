@@ -1,5 +1,6 @@
 #region Load Modules
 
+from tracemalloc import start
 from gurobipy import *
 import itertools
 import os.path
@@ -10,6 +11,7 @@ from copy import deepcopy
 from multiprocessing import Pool
 from functools import partial
 from mpi4py import MPI
+import time
 
 import tqdm
 from tqdm.keras import TqdmCallback
@@ -180,6 +182,7 @@ def simulation(state_i, repl, warmup, duration, weights):
     for rep in range(repl):
 
         random_stream = np.random.RandomState(seed = state_i*repl*2)
+
         st_x = [min(random_stream.poisson(cap* 0.95**(n)),cap) for n in N]
         st_y = {p:random_stream.poisson(dm[p]) for p in P}
         state = {'x': st_x, 'y': st_y}
@@ -242,33 +245,35 @@ def valueApprox(states_range, repl, warmup, duration, weights):
     disc_costs = []
     avg_costs = []
 
-    if __name__ == '__main__':
-        # pool = Pool(os.cpu_count())
-        for state_iters in states_range:
-            state, disc_cost, avg_cost = simulation(state_i = state_iters, repl=repl, warmup=warmup, duration=duration, weights=weights)
-        # for state, disc_cost, avg_cost in tqdm.tqdm(pool.imap_unordered(partial(simulation, repl=repl, warmup=warmup, duration=duration, weights=weights), n_states_ran), total=len(n_states_ran)):
-            states.append(state)
-            disc_costs.append(disc_cost)
-            avg_costs.append(avg_cost)
-            print(f'Process {rank} of {size} finished simulation {state_iters}')
-        # pool.close()
+    # if __name__ == '__main__':
+    # pool = Pool(os.cpu_count())
+    for state_iters in states_range:
+        start_time = time.time()
+        state, disc_cost, avg_cost = simulation(state_i = state_iters, repl=repl, warmup=warmup, duration=duration, weights=weights)
+    # for state, disc_cost, avg_cost in tqdm.tqdm(pool.imap_unordered(partial(simulation, repl=repl, warmup=warmup, duration=duration, weights=weights), n_states_ran), total=len(n_states_ran)):
+        states.append(state)
+        disc_costs.append(disc_cost)
+        avg_costs.append(avg_cost)
+        end_time = time.time()
+        print(f'Process {rank} of {size} finished simulation {state_iters} in {round(end_time-start_time,2)} seconds')
+    # pool.close()
 
-        # Convert States to Dataframe
-        df = pd.DataFrame()
-        for p in P: df[f"y_{p}"] = 0
-        for n in N: df[f"x_{n+1}"] = 0
-        df["disc_cost"] = 0
-        df["avg_cost"] = 0
+    # Convert States to Dataframe
+    df = pd.DataFrame()
+    for p in P: df[f"y_{p}"] = 0
+    for n in N: df[f"x_{n+1}"] = 0
+    df["disc_cost"] = 0
+    df["avg_cost"] = 0
 
-        for i in range(len(states)):
-            y = {f"y_{p}":[states[i]['y'][p]] for p in P}
-            x = {f"x_{n+1}":[states[i]['x'][n]] for n in N}
-            disc_cost = {"disc_cost": [disc_costs[i]]}
-            avg_cost = {"avg_cost": [avg_costs[i]]}
-            t_df = pd.DataFrame.from_dict({**x, **y, **disc_cost, **avg_cost})
-            df = pd.concat([df, t_df])
+    for i in range(len(states)):
+        y = {f"y_{p}":[states[i]['y'][p]] for p in P}
+        x = {f"x_{n+1}":[states[i]['x'][n]] for n in N}
+        disc_cost = {"disc_cost": [disc_costs[i]]}
+        avg_cost = {"avg_cost": [avg_costs[i]]}
+        t_df = pd.DataFrame.from_dict({**x, **y, **disc_cost, **avg_cost})
+        df = pd.concat([df, t_df])
 
-        return(df)
+    return(df)
 def fitNN(value_df):
     '''
     # Inputs:
@@ -318,7 +323,6 @@ rank = comm.Get_rank()
 size = comm.Get_size()
 
 #region Prepare Data
-
 # Load Data
 if rank == 0:
     my_path = os.getcwd()
@@ -389,15 +393,15 @@ else:
 
 # BroadCast Data
 N = comm.bcast(N, root=0)
-P = comm.bcast(N, root=0)
+P = comm.bcast(P, root=0)
 
-tg = comm.bcast(N, root=0)
-dm = comm.bcast(N, root=0)
-cap = comm.bcast(N, root=0)
-scap = comm.bcast(N, root=0)
-oc = comm.bcast(N, root=0)
-lb = comm.bcast(N, root=0)
-gam = comm.bcast(N, root=0)
+tg = comm.bcast(tg, root=0)
+dm = comm.bcast(dm, root=0)
+cap = comm.bcast(cap, root=0)
+scap = comm.bcast(scap, root=0)
+oc = comm.bcast(oc, root=0)
+lb = comm.bcast(lb, root=0)
+gam = comm.bcast(gam, root=0)
 
 book = comm.bcast(book, root=0)
 
