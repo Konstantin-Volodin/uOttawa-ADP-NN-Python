@@ -53,8 +53,8 @@ df_200_100_300['type'] = '200_100_300'
 
 # Iterations
 df_iter = pd.DataFrame()
-for i in range(10):
-    df_new = pd.read_csv(f'data/simulation-value-1-iter{i}_10_50_100.csv')
+for i in range(50):
+    df_new = pd.read_csv(f'data/simulation-value-1-iter{i}_100_50_150.csv')
     df_new['type'] = f'{i}_100_50_150'
     df_iter = pd.concat([df_iter, df_new])
 
