@@ -4,4 +4,4 @@
 #SBATCH --mem-per-cpu=3gb
 #SBATCH --job-name=optimsim
 #SBATCH --output=optimsim.out
-srun optimSimulation.py
+srun python3 optimSimulation.py
