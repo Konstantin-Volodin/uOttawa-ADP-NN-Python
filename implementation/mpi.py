@@ -5,6 +5,7 @@ import time
 import tqdm
 import os
 from multiprocessing import Pool
+import numpy as np
 
 def test(iter):
     print(f'Start {iter} at {time.time()}')
@@ -13,16 +14,26 @@ def test(iter):
 
 if __name__ == "__main__":
     
-    for i in range(10):
-        print(f'This loop should only be done once {i}')
+    from mpi4py import MPI
 
-    n_iters = range(128*2)
-    pool_size = os.environ.get('SLURM_NTASKS')
-    print(pool_size)
-    pool = Pool(pool_size)
-    for i in tqdm.tqdm(pool.imap_unordered(test, n_iters), total=len(n_iters)):
-        pass
-    pool.close()
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    size = comm.Get_size()
+
+    print('Hello from process {} out of {}'.format(rank, size))
+
+
+    if rank == 0:
+        data = np.arange(4.0)
+    else:
+        data = None
+
+    data = comm.bcast(data, root=0)
+
+    if rank == 0:
+        print('Process {} broadcast data:'.format(rank), data)
+    else:
+        print('Process {} received data:'.format(rank), data)
     
     for i in range(10):
-        print(f'This loop should only be done once {i}')
+        print(f'This end loop should only be done once {i}')
