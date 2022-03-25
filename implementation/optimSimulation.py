@@ -1,5 +1,7 @@
+#%%
 #region Load Modules
 
+from random import random
 from tracemalloc import start
 from gurobipy import *
 import itertools
@@ -46,9 +48,9 @@ def calculateCost(state, action):
         cost += lb[p] * (state['y'][p] - sum(action['a'][p]) - action['z'][p])
 
     return cost
-def SimPolicy(state):
+def ExploitPolicy(state):
     '''
-    ### Input: Dictionary containing current space: {"x": x, "y": y} & weights from the neural network
+    ### Input: Dictionary containing current space: {"x": x, "y": y}
     ### Output: Dictionary containing action: {"a": a, "z": z}
     ### Policy: Policy uses Myopic cost and also an approximation of cost-to-go function. Approximation is done through a neural network
     '''
@@ -61,6 +63,43 @@ def SimPolicy(state):
         sy[p].UB = round(state['y'][p])
 
     # Optimize
+    model.setObjective(exploit_objective, GRB.MINIMIZE)
+    model.optimize()
+
+    # If unable to optimize - save the model
+    try:
+        ac_a = {p:[aa[(p,n)].X for n in N] for p in P}
+        ac_z = {p:az[p].X for p in P}
+    except:
+        print('failed')
+        model.params.LogToConsole = 1
+        model.optimize()
+        model.write(f'nn_{np.random.random()}.lp')
+
+    # Generate Action
+    ac_a = {p:[aa[(p,n)].X for n in N] for p in P}
+    ac_z = {p:az[p].X for p in P}
+
+    action = {"a": ac_a, "z": ac_z}
+
+    # Return action
+    return(action)
+def ExplorePolicy(state):
+    '''
+    ### Input: Dictionary containing current space: {"x": x, "y": y} & weights from the neural network
+    ### Output: Dictionary containing action: {"a": a, "z": z}
+    ### Policy: Policy uses completely random actions
+    '''
+    # Fix State Variables
+    for n in N: 
+        sx[n].LB = round(state['x'][n])
+        sx[n].UB = round(state['x'][n])
+    for p in P:
+        sy[p].LB = round(state['y'][p])
+        sy[p].UB = round(state['y'][p])
+
+    # Optimize
+    model.setObjective(explore_objective, GRB.MINIMIZE)
     model.optimize()
 
     # If unable to optimize - save the model
@@ -87,38 +126,65 @@ def simulation(state_i, repl, warmup, duration):
         Estimates a long term discounted cost & average cost for a single input state
     '''
     # Initialize state data
-    state_to_evaluate = []
+    state_to_evaluate = None
     final_disc_cost = []
     final_avg_cost = []
 
+    random_stream = np.random.RandomState(seed = state_i)
+    st_x = [min(random_stream.poisson(cap* 0.95**(n)),cap) for n in N]
+    st_y = {p:random_stream.poisson(dm[p]) for p in P}
+    state = {'x': st_x, 'y': st_y}
+
+    # Warm up
+    for day in range(warmup):
+
+        # generate action
+        if random_stream.random() >= 0.9:
+            action = ExploitPolicy(state)
+        else:
+            action = ExplorePolicy(state)
+
+        # action = ExplorePolicy(state)
+
+        # Execute Action
+        for p in P:
+            st_y[p] -= action['z'][p]
+        for p,n in itertools.product(P, N):
+            st_y[p] -= action['a'][p][n]
+            st_x[n] += action['a'][p][n]
+
+        # Transition
+        for p in P:
+            st_y[p] += random_stream.poisson(dm[p])
+        for n in N:
+            if n != N[-1]: st_x[n] = st_x[n+1]
+            else: st_x[n] = 0
+
+    state_to_evaluate = deepcopy(state)
+
+    # Evaluation
     for rep in range(repl):
 
-        random_stream = np.random.RandomState(seed = state_i*repl*2)
-
-        st_x = [min(random_stream.poisson(cap* 0.95**(n)),cap) for n in N]
-        st_y = {p:random_stream.poisson(dm[p]) for p in P}
-        state = {'x': st_x, 'y': st_y}
         disc_cost = 0
         avg_cost = 0
         avg_iter = 0
+        state = deepcopy(state_to_evaluate)
 
         # Single Replication
-        for day in range(duration):
-
-            # Save State for df
-            if day == warmup:
-                state_to_evaluate.append(deepcopy(state))
-                random_stream = np.random.RandomState(seed = ((state_i*repl*2) + (rep+1)))
+        for day in range(duration-warmup):
                 
-            # generate action
-            action = SimPolicy(state)
+            # generate action            
+            if random_stream.random() >= 0.9:
+                action = ExploitPolicy(state)
+            else:
+                action = ExplorePolicy(state)
+            # action = ExplorePolicy(state)
 
             # Compute Cost
-            if day >= warmup:
-                cost = calculateCost(state, action)
-                disc_cost += cost * (gam**(day-warmup))
-                avg_cost += cost
-                avg_iter += 1
+            cost = calculateCost(state, action)
+            disc_cost += cost * (gam**(day-warmup))
+            avg_cost += cost
+            avg_iter += 1
 
             # Execute Action
             for p in P:
@@ -137,7 +203,7 @@ def simulation(state_i, repl, warmup, duration):
         final_disc_cost.append(disc_cost)
         final_avg_cost.append(avg_cost/avg_iter)
     
-    return(state_to_evaluate[0], np.average(final_disc_cost), np.average(final_avg_cost))
+    return(state_to_evaluate, np.average(final_disc_cost), np.average(final_avg_cost))
 
 #endregion
 #region Optimization Functions
@@ -157,19 +223,15 @@ def valueApprox(states_range, repl, warmup, duration):
     disc_costs = []
     avg_costs = []
 
-    # if __name__ == '__main__':
-    # pool = Pool(os.cpu_count())
+    start_time = time.time()
     for state_iters in states_range:
-        start_time = time.time()
         state, disc_cost, avg_cost = simulation(state_i = state_iters, repl=repl, warmup=warmup, duration=duration)
-    # for state, disc_cost, avg_cost in tqdm.tqdm(pool.imap_unordered(partial(simulation, repl=repl, warmup=warmup, duration=duration, weights=weights), n_states_ran), total=len(n_states_ran)):
         states.append(state)
         disc_costs.append(disc_cost)
         avg_costs.append(avg_cost)
-        end_time = time.time()
-        print(f'Process {rank} of {size} finished simulation {state_iters} in {round(end_time-start_time,2)} seconds for {repl}_{warmup}_{duration}')
         sys.stdout.flush()
-    # pool.close()
+    end_time = time.time()
+    print(f'Process {rank} of {size} finished simulations {states_range} in {round(end_time-start_time,2)} seconds for {repl}_{warmup}_{duration}')
 
     # Convert States to Dataframe
     df = pd.DataFrame()
@@ -326,34 +388,34 @@ reg_weights = comm.bcast(reg_weights, root=0)
 #endregion
 
 # Performs Optimization
-n_states = 256*4
-repl = 100
+n_states = 256*8
+repl = 300
 warmup = 50
-duration = 400
-wamrups = [0,1,2,3,4,5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
+duration = 450
+alpha = 0.8
 
-for warm_iter in wamrups:
-    warmup = warm_iter
-    duration = warmup + 400
+#region Splits up iterations between each CPU
+if rank == 0:
+    # Splits up the Data into Sections
+    ave, res = divmod(n_states, size)
+    counts = [ave + 1 if p < res else ave for p in range(size)]
 
-    #region Splits up iterations between each CPU
-    if rank == 0:
-        # Splits up the Data into Sections
-        ave, res = divmod(n_states, size)
-        counts = [ave + 1 if p < res else ave for p in range(size)]
+    # determine the starting and ending indices of each sub-task
+    starts = [sum(counts[:p]) for p in range(size)]
+    ends = [sum(counts[:p+1]) for p in range(size)]
 
-        # determine the starting and ending indices of each sub-task
-        starts = [sum(counts[:p]) for p in range(size)]
-        ends = [sum(counts[:p+1]) for p in range(size)]
+    # converts data into a list of arrays 
+    iterable = [range(starts[p],ends[p]) for p in range(size)]
+else:
+    iterable = None
+iterable = comm.scatter(iterable, root=0)
+#endregion
+# print(f'Process {rank} of {size} received {iterable} for {repl}_{warmup}_{duration}')
+sys.stdout.flush()
 
-        # converts data into a list of arrays 
-        iterable = [range(starts[p],ends[p]) for p in range(size)]
-    else:
-        iterable = None
-    iterable = comm.scatter(iterable, root=0)
-    #endregion
-    print(f'Process {rank} of {size} received {iterable} for {repl}_{warmup}_{duration}')
-    sys.stdout.flush()
+
+# Optimization
+for iteri in range(100):
 
     #region Creates an optimization model
     model = Model()
@@ -428,53 +490,48 @@ for warm_iter in wamrups:
     )
 
     # Objective Function
-    model.setObjective((
+    exploit_objective = LinExpr(
         quicksum(quicksum( aa[(p,n)] * book[(p,n)] for p in P) for n in N) + 
         quicksum( az[p] * oc[p] for p in P) +
         quicksum( (sy[p] - quicksum(aa[(p,n)] for n in N) - az[p]) * lb[p] for p in P) + 
         gam * pred_val
-        # gam * vrl[-1][0]
-    ), GRB.MINIMIZE)
+    )
+    explore_objective = LinExpr( 1 )
     #endregion
 
     # Performs Simulation
     val_portion = valueApprox(iterable, repl, warmup, duration)
     val_portion = comm.gather(val_portion, root=0)
-    # comm.Barrier()
 
-    # Saves Simulation Data
+    # Cleans up Simulation Data
     if rank == 0:
         value_data = pd.DataFrame()
         for item in val_portion:
             value_data = pd.concat([value_data, item])
-        print(value_data)
-        value_data.to_csv(f'data/simulation-value_{repl}_{warmup}_{duration}.csv', index=False)
-    # comm.Barrier()
+        value_data.to_csv(f'data/simulation-value-iter{iteri}_{repl}_{warmup}_{duration}.csv', index=False)
+    comm.Barrier()
+
+    if rank == 0: print(value_data['avg_cost'].mean())
 
     # Fits a Predictive Model
+    if rank == 0:
+        value_data['x'] = 0
+        for n in N: value_data['x'] += value_data[f'x_{n+1}'] 
+        value_data['y'] = 0
+        for p in P: value_data['y'] += value_data[f'y_{p}']
+        new_reg_weights = fitNN(value_data)
 
-    # Saves Predictive Model
-
-
-# warms = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
-
-# for warm_i in warms:
-
-# for dur_i in durs:
-#     duration=dur_i
-    # warmup= warm_i
-#%% 
-# After the sensitivity analysis is done & simulation parameters are chosen - we will go through the optimization algortithm
-# value_data_tot = pd.DataFrame()
-# weights_list = []
-# average_cost_over_time = []
-# for i in range(50):
-    # print(f"Iteration: {i}")
+        for betaval in range(len(reg_weights)):
+            reg_weights[betaval] = reg_weights[betaval] * alpha + new_reg_weights[betaval] * (1-alpha)
     
-    # Generate Simulation Estimates
-    # value_data = valueApprox(n_states, repl, warmup, duration, reg_weights)
-    # value_data.to_csv(f'data/simulation-value_{repl}_{warmup}_{duration}.csv', index=False)
-    # # average_cost_over_time.append(value_data['avg_cost'].mean())
+        # Save Data
+        with open(f'data/simulation-betas-iter{iteri}_{repl}_{warmup}_{duration}.pickle', 'wb') as file:
+            pickle.dump(reg_weights, file) 
+        # print(reg_weights)
+    reg_weights = comm.bcast(reg_weights, root=0)
+    comm.Barrier()
+
+# Saves Predictive Model
 
     # # Fit Value Approximate Model
     # value_data['x'] = 0
@@ -496,3 +553,4 @@ for warm_iter in wamrups:
 # print(f'Weights: {weights_list}')
 # value_data_tot.to_csv(f'data/simulation-value-1-total_{repl}_{warmup}_{duration}.csv', index=False)
     
+# %%
