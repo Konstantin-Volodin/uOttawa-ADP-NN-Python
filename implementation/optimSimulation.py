@@ -388,8 +388,8 @@ reg_weights = comm.bcast(reg_weights, root=0)
 #endregion
 
 # Performs Optimization
-n_states = 100
-repl = 50
+n_states = 256*8
+repl = 300
 warmup = 50
 duration = 450
 alpha = 0.8
@@ -416,7 +416,7 @@ sys.stdout.flush()
 
 
 # Optimization
-for iteri in range(100):
+for iteri in range(50):
 
     #region Creates an optimization model
     model = Model()
