@@ -1,5 +1,6 @@
 #!/bin/bash
 #SBATCH --time=01-00
+#SBATCH --nodes=16
 #SBATCH --ntasks=512
 #SBATCH --mem-per-cpu=4G
 #SBATCH --job-name=optimsim
