@@ -139,7 +139,7 @@ def simulation(state_i, repl, warmup, duration):
     for day in range(warmup):
 
         # generate action
-        if random_stream.random() >= 0.9:
+        if random_stream.random() >= epsilon:
             action = ExploitPolicy(state)
         else:
             action = ExplorePolicy(state)
@@ -174,7 +174,7 @@ def simulation(state_i, repl, warmup, duration):
         for day in range(duration-warmup):
                 
             # generate action            
-            if random_stream.random() >= 0.9:
+            if random_stream.random() >= epsilon:
                 action = ExploitPolicy(state)
             else:
                 action = ExplorePolicy(state)
@@ -388,11 +388,12 @@ reg_weights = comm.bcast(reg_weights, root=0)
 #endregion
 
 # Performs Optimization
-n_states = 512*4
-repl = 300
+n_states = 100
+repl = 50
 warmup = 50
 duration = 450
 alpha = 0.8
+epsilon = 1
 
 #region Splits up iterations between each CPU
 if rank == 0:
@@ -519,10 +520,10 @@ for iteri in range(100):
         for n in N: value_data['x'] += value_data[f'x_{n+1}'] 
         value_data['y'] = 0
         for p in P: value_data['y'] += value_data[f'y_{p}']
-        new_reg_weights = fitNN(value_data)
+        reg_weights = fitNN(value_data)
 
-        for betaval in range(len(reg_weights)):
-            reg_weights[betaval] = reg_weights[betaval] * alpha + new_reg_weights[betaval] * (1-alpha)
+        # for betaval in range(len(reg_weights)):
+        #     reg_weights[betaval] = reg_weights[betaval] * alpha + new_reg_weights[betaval] * (1-alpha)
     
         # Save Data
         with open(f'data/simulation-betas-iter{iteri}_{repl}_{warmup}_{duration}.pickle', 'wb') as file:
