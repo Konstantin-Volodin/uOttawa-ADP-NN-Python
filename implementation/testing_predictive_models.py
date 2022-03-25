@@ -45,9 +45,9 @@ df_100_50_850['type'] = '100_50_850'
 df_iter = pd.DataFrame()
 
 # durs = [100, 150, 250, 450, 850]
-for i in range(10):
-    df_new = pd.read_csv(f'data/simulation-value-iter{i}_10_50_100.csv')
-    df_new['type'] = f'iter{i}_10_50_100'
+for i in range(5):
+    df_new = pd.read_csv(f'data/simulation-value-iter{i}_300_50_450.csv')
+    df_new['type'] = f'iter{i}_300_50_450'
     df_iter = pd.concat([df_iter, df_new])
 
 # %% Graph Data
@@ -60,13 +60,13 @@ df_tot['y'] = 0
 for p in P: df_tot['y'] += df_tot[f'y_{p}']
 df_tot = df_tot.sort_values(by=['x','y'])
 
-# fig = px.scatter(df_tot, x='x', y='disc_cost', color='type')
-# fig.update_traces(marker={'size': 5})
-# fig.show(renderer='browser')
+fig = px.scatter(df_tot, x='x', y='disc_cost', color='type')
+fig.update_traces(marker={'size': 5})
+fig.show(renderer='browser')
 
-# fig = px.scatter(df_tot, x='y', y='disc_cost', color='type')
-# fig.update_traces(marker={'size': 5})
-# fig.show(renderer='browser')
+fig = px.scatter(df_tot, x='y', y='disc_cost', color='type')
+fig.update_traces(marker={'size': 5})
+fig.show(renderer='browser')
 
 fig = px.scatter_3d(df_tot, x='x', y='y', z='disc_cost', color='type')
 fig.update_traces(marker={'size': 4})

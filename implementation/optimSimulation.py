@@ -148,17 +148,17 @@ def simulation(state_i, repl, warmup, duration):
 
         # Execute Action
         for p in P:
-            st_y[p] -= action['z'][p]
+            state['y'][p] -= action['z'][p]
         for p,n in itertools.product(P, N):
-            st_y[p] -= action['a'][p][n]
-            st_x[n] += action['a'][p][n]
+            state['y'][p] -= action['a'][p][n]
+            state['x'][n] += action['a'][p][n]
 
         # Transition
         for p in P:
-            st_y[p] += random_stream.poisson(dm[p])
+            state['y'][p] += random_stream.poisson(dm[p])
         for n in N:
-            if n != N[-1]: st_x[n] = st_x[n+1]
-            else: st_x[n] = 0
+            if n != N[-1]: state['x'][n] = state['x'][n+1]
+            else: state['x'][n] = 0
 
     state_to_evaluate = deepcopy(state)
 
@@ -188,17 +188,17 @@ def simulation(state_i, repl, warmup, duration):
 
             # Execute Action
             for p in P:
-                st_y[p] -= action['z'][p]
+                state['y'][p] -= action['z'][p]
             for p,n in itertools.product(P, N):
-                st_y[p] -= action['a'][p][n]
-                st_x[n] += action['a'][p][n]
+                state['y'][p] -= action['a'][p][n]
+                state['x'][n] += action['a'][p][n]
 
             # Transition
             for p in P:
-                st_y[p] += random_stream.poisson(dm[p])
+                state['y'][p] += random_stream.poisson(dm[p])
             for n in N:
-                if n != N[-1]: st_x[n] = st_x[n+1]
-                else: st_x[n] = 0
+                if n != N[-1]: state['x'][n] = state['x'][n+1]
+                else: state['x'][n] = 0
 
         final_disc_cost.append(disc_cost)
         final_avg_cost.append(avg_cost/avg_iter)
@@ -388,7 +388,7 @@ reg_weights = comm.bcast(reg_weights, root=0)
 #endregion
 
 # Performs Optimization
-n_states = 256*8
+n_states = 512*4
 repl = 300
 warmup = 50
 duration = 450
