@@ -139,7 +139,7 @@ def simulation(state_i, repl, warmup, duration):
     for day in range(warmup):
 
         # generate action
-        if random_stream.random() >= epsilon:
+        if random_stream.random() <= epsilon:
             action = ExploitPolicy(state)
         else:
             action = ExplorePolicy(state)
@@ -230,6 +230,7 @@ def valueApprox(states_range, repl, warmup, duration):
         disc_costs.append(disc_cost)
         avg_costs.append(avg_cost)
         sys.stdout.flush()
+        # print(f'Process {rank} of {size} finished simulations {state_iters}')
     end_time = time.time()
     print(f'Process {rank} of {size} finished simulations {states_range} in {round(end_time-start_time,2)} seconds for {repl}_{warmup}_{duration}')
 
@@ -392,7 +393,7 @@ n_states = 256*8
 repl = 300
 warmup = 50
 duration = 450
-alpha = 0.8
+alpha = 1
 epsilon = 1
 
 #region Splits up iterations between each CPU
@@ -520,10 +521,10 @@ for iteri in range(50):
         for n in N: value_data['x'] += value_data[f'x_{n+1}'] 
         value_data['y'] = 0
         for p in P: value_data['y'] += value_data[f'y_{p}']
-        reg_weights = fitNN(value_data)
+        new_reg_weights = fitNN(value_data)
 
-        # for betaval in range(len(reg_weights)):
-        #     reg_weights[betaval] = reg_weights[betaval] * alpha + new_reg_weights[betaval] * (1-alpha)
+        for betaval in range(len(reg_weights)):
+            reg_weights[betaval] = reg_weights[betaval] * (1-alpha) + new_reg_weights[betaval] * (alpha)
     
         # Save Data
         with open(f'data/simulation-betas-iter{iteri}_{repl}_{warmup}_{duration}.pickle', 'wb') as file:
@@ -531,27 +532,3 @@ for iteri in range(50):
         # print(reg_weights)
     reg_weights = comm.bcast(reg_weights, root=0)
     comm.Barrier()
-
-# Saves Predictive Model
-
-    # # Fit Value Approximate Model
-    # value_data['x'] = 0
-    # for n in N: value_data['x'] += value_data[f'x_{n+1}'] 
-    # value_data['y'] = 0
-    # for p in P: value_data['y'] += value_data[f'y_{p}']
-    # # value_data_tot = pd.concat([value_data_tot, value_data])
-    # print(f"\tFitting Data")
-    # reg_weights = fitNN(value_data)
-    # # weights_list.append(nn_weights)
-
-    # # Save Data
-    # with open(f'data/sim-optim_{repl}_{warmup}_{duration}.pickle', 'wb') as file:
-    #     pickle.dump({'value': value_data['avg_cost'].mean(), 'weights': reg_weights}, file) 
-
-    # print(nn_weights)
-
-# print(f"improvement trajectory : {average_cost_over_time}")
-# print(f'Weights: {weights_list}')
-# value_data_tot.to_csv(f'data/simulation-value-1-total_{repl}_{warmup}_{duration}.csv', index=False)
-    
-# %%

@@ -28,31 +28,31 @@ N = [i for i in range(int(data['index']['n']))]
 P = data['index']['p']
 
 # Load Data
-df_100_50_100 = pd.read_csv('data/simulation-value_100_50_100.csv')
-df_100_50_150 = pd.read_csv('data/simulation-value_100_50_150.csv')
-df_100_50_250 = pd.read_csv('data/simulation-value_100_50_250.csv')
-df_100_50_450 = pd.read_csv('data/simulation-value_100_50_450.csv')
-df_100_50_850 = pd.read_csv('data/simulation-value_100_50_850.csv')
+# df_100_50_100 = pd.read_csv('data/simulation-value_100_50_100.csv')
+# df_100_50_150 = pd.read_csv('data/simulation-value_100_50_150.csv')
+# df_100_50_250 = pd.read_csv('data/simulation-value_100_50_250.csv')
+# df_100_50_450 = pd.read_csv('data/simulation-value_100_50_450.csv')
+# df_100_50_850 = pd.read_csv('data/simulation-value_100_50_850.csv')
 
-# Modify Data
-df_100_50_100['type'] = '100_50_100'
-df_100_50_150['type'] = '100_50_150'
-df_100_50_250['type'] = '100_50_250'
-df_100_50_450['type'] = '100_50_450'
-df_100_50_850['type'] = '100_50_850'
+# # Modify Data
+# df_100_50_100['type'] = '100_50_100'
+# df_100_50_150['type'] = '100_50_150'
+# df_100_50_250['type'] = '100_50_250'
+# df_100_50_450['type'] = '100_50_450'
+# df_100_50_850['type'] = '100_50_850'
 
 # Iterations
 df_iter = pd.DataFrame()
 
 # durs = [100, 150, 250, 450, 850]
-for i in range(3):
-    df_new = pd.read_csv(f'data/simulation-value-iter{i}_50_50_450.csv')
+for i in range(1):
+    df_new = pd.read_csv(f'data/simulation-value-iter{i}_5_50_80.csv')
     df_new['type'] = f'iter{i}_50_50_450'
     df_iter = pd.concat([df_iter, df_new])
 
 # %% Graph Data
 # Review Data
-df_tot = pd.concat([df_100_50_100, df_100_50_150, df_100_50_250, df_100_50_450, df_100_50_850])
+# df_tot = pd.concat([df_100_50_100, df_100_50_150, df_100_50_250, df_100_50_450, df_100_50_850])
 df_tot = df_iter
 df_tot['x'] = 0
 for n in N: df_tot['x'] += df_tot[f'x_{n+1}']
