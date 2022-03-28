@@ -174,7 +174,7 @@ def simulation(state_i, repl, warmup, duration):
         for day in range(duration-warmup):
                 
             # generate action            
-            if random_stream.random() >= epsilon:
+            if random_stream.random() <= epsilon:
                 action = ExploitPolicy(state)
             else:
                 action = ExplorePolicy(state)
