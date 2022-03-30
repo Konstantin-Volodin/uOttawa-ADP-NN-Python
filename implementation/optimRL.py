@@ -11,13 +11,12 @@ import pandas as pd
 import numpy as np
 import gym
 from gym import spaces
-from stable_baselines3 import PPO, A2C
+from stable_baselines3 import PPO, A2C, DQN
 
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.evaluation import evaluate_policy
 import tensorflow as tf
 #endregion
-
 #region Load & Prepare Data
 # load data
 my_path = os.getcwd()
@@ -68,7 +67,7 @@ class SchedEnv(gym.Env):
         self.oc = oc
         self.lb = lb
         self.gam = gam
-        self.tot_steps = 50
+        self.tot_steps = 400
         self.cur_step = 1
         self.cost = 0
 
@@ -189,23 +188,32 @@ class SchedEnv(gym.Env):
 
         return self.state, -cost, done, {}
 #endregion
-#%%
-seed = 12342345
-env = SchedEnv(N, P, cap, scap, dm, tg, oc, lb, gam, seed=seed)
 
 #%% Compare Models
-model = A2C("MultiInputPolicy", env, verbose=1, seed=seed, device='cuda', tensorboard_log='data/PPO_RL')
-model.learn(total_timesteps=5000)
-evaluate_policy(model, env)
+if __name__ == '__main__':
+    env = SchedEnv(N, P, cap, scap, dm, tg, oc, lb, gam)
+    save_intervals = 10
+    timesteps = 10000000
 
-#%%
-obs = env.reset(debug=True)
-for i in range(10):
-    action, _state = model.predict(obs, deterministic=True)
-    obs, reward, done, info = env.step(action)
-    # env.render()
-    if done:
-      obs = env.reset()
+    model = PPO("MultiInputPolicy", env, verbose=1, device='cuda', tensorboard_log='data/rl-logs', )
+    for i in range(save_intervals):
+        model.learn(total_timesteps=timesteps/save_intervals, reset_num_timesteps=False, tb_log_name='PPO')
+        model.save(f'data/models/rl-ppo')
 
+    # model = DQN("MultiInputPolicy", env, verbose=1, device='cuda', tensorboard_log='data/rl-logs', )
+    # for i in range(save_intervals):
+    #     model.learn(total_timesteps=timesteps/save_intervals, reset_num_timesteps=False, tb_log_name='DQN')
+    #     model.save(f'data/models/rl-dqn-model')
 
-# %%
+    model = A2C("MultiInputPolicy", env, verbose=1, device='cuda', tensorboard_log='data/rl-logs', )
+    for i in range(save_intervals):
+        model.learn(total_timesteps=timesteps/save_intervals, reset_num_timesteps=False, tb_log_name='A2C')
+        model.save(f'data/models/rl-a2c')
+
+    obs = env.reset(debug=True)
+    for i in range(10):
+        action, _state = model.predict(obs, deterministic=True)
+        obs, reward, done, info = env.step(action)
+        # env.render()
+        if done:
+          obs = env.reset()

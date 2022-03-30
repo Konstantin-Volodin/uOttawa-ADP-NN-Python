@@ -204,7 +204,7 @@ while True:
 betas = {'b0': mc_b0.Pi, 'bx': {}, 'by': {}}
 for n in N: betas['bx'][n] = mc_bx[n].Pi
 for p in P: betas['by'][p] = mc_by[p].Pi
-with open('data/linear-betas.pickle', 'wb') as file:
+with open('data/models/ppq.pickle', 'wb') as file:
     pickle.dump(betas, file)
 #endregion
 

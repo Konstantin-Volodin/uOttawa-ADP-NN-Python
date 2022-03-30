@@ -1,6 +1,4 @@
-#%%
 #region Load Modules
-
 from random import random
 from tracemalloc import start
 from gurobipy import *
@@ -20,14 +18,14 @@ import tqdm
 from tqdm.keras import TqdmCallback
 import numpy as np
 import pandas as pd
+import tensorflow as tf
 
 from sklearn import *
 from keras.models import Sequential
 from keras.layers import Dense, Dropout
-
 #endregion
-#region Simulation
 
+#region Simulation
 def calculateCost(state, action):
     '''
     ### Input: 2 dictionaries containing current space and a corresponding action
@@ -52,7 +50,7 @@ def ExploitPolicy(state):
     '''
     ### Input: Dictionary containing current space: {"x": x, "y": y}
     ### Output: Dictionary containing action: {"a": a, "z": z}
-    ### Policy: Policy uses Myopic cost and also an approximation of cost-to-go function. Approximation is done through a neural network
+    ### Policy: Policy uses Myopic cost and also an approximation of cost-to-go function. Approximation is done through a regression model (of different complexities)
     '''
     # Fix State Variables
     for n in N: 
@@ -88,7 +86,7 @@ def ExplorePolicy(state):
     '''
     ### Input: Dictionary containing current space: {"x": x, "y": y} & weights from the neural network
     ### Output: Dictionary containing action: {"a": a, "z": z}
-    ### Policy: Policy uses completely random actions
+    ### Policy: First feasible policy that ignores any costs
     '''
     # Fix State Variables
     for n in N: 
@@ -204,10 +202,9 @@ def simulation(state_i, repl, warmup, duration):
         final_avg_cost.append(avg_cost/avg_iter)
     
     return(state_to_evaluate, np.average(final_disc_cost), np.average(final_avg_cost))
-
 #endregion
-#region Optimization Functions
 
+#region Optimization Functions
 def valueApprox(states_range, repl, warmup, duration):
     '''
     # Inputs:
@@ -230,7 +227,7 @@ def valueApprox(states_range, repl, warmup, duration):
         disc_costs.append(disc_cost)
         avg_costs.append(avg_cost)
         sys.stdout.flush()
-        # print(f'Process {rank} of {size} finished simulations {state_iters}')
+        print(f'Process {rank} of {size} finished simulations {state_iters}')
     end_time = time.time()
     print(f'Process {rank} of {size} finished simulations {states_range} in {round(end_time-start_time,2)} seconds for {repl}_{warmup}_{duration}')
 
@@ -266,9 +263,8 @@ def fitNN(value_df):
     reg = linear_model.Ridge(alpha=.5)
     reg.fit(x_cols, y_cols)
 
-    return(reg.coef_.tolist())
 
-    # Split into train and test
+    # # Split into train and test
     # x_train, x_test, y_train, y_test = model_selection.train_test_split(x_cols, y_cols, test_size = 0.2, train_size = 0.8)
 
     # # Create the model
@@ -279,7 +275,7 @@ def fitNN(value_df):
 
     # # Fit the model
     # model.compile(loss='MeanSquaredError', optimizer='adam', metrics=['MeanAbsolutePercentageError'])
-    # model.fit(x=x_train, y=y_train, epochs=10000, validation_data=(x_test, y_test), verbose=0, callbacks=[TqdmCallback(verbose=1)])   
+    # model.fit(x=x_train, y=y_train, epochs=5000, validation_data=(x_test, y_test), verbose=0, callbacks=[TqdmCallback(verbose=1)])   
 
     # # Saves weights
     # weights = {}
@@ -290,7 +286,8 @@ def fitNN(value_df):
 
     # # Return weigts
     # return(weights)
-
+    
+    return(reg.coef_.tolist())
 #endregion
 
 # Initialization
@@ -325,8 +322,8 @@ if rank == 0:
             for k in range(0, (n+1) - tg[p]):
                 book[(p,n)] += (gam**k) * lb[p]
 
-    # Neural Network Data
-    nn_layers = (len(N)+len(P)+2,     40,40,40,40,40,   1)
+    # Neural Network Global Weights
+    nn_layers = (len(N)+len(P)+2,     40,40,   1)
     nn_weights = {}
     for layer in range(len(nn_layers)-1):
         ly = f"layer_{layer}"
@@ -340,7 +337,7 @@ if rank == 0:
             for out in range(nn_layers[layer+1]):
                 nn_weights[ly]["weights"][inn].append(0)
 
-    # Linear Regression Weights
+    # Linear Regression Global Weights
     reg_layers = (len(N)+len(P)+2)
     reg_weights = [0 for it in range(reg_layers)]
 else:
@@ -389,12 +386,12 @@ reg_weights = comm.bcast(reg_weights, root=0)
 #endregion
 
 # Performs Optimization
-n_states = 256*8
+n_states = 256 * 8
 repl = 300
 warmup = 50
 duration = 450
 alpha = 1
-epsilon = 1
+epsilon = 0.9
 
 #region Splits up iterations between each CPU
 if rank == 0:
@@ -414,7 +411,6 @@ iterable = comm.scatter(iterable, root=0)
 #endregion
 # print(f'Process {rank} of {size} received {iterable} for {repl}_{warmup}_{duration}')
 sys.stdout.flush()
-
 
 # Optimization
 for iteri in range(50):
@@ -456,7 +452,7 @@ for iteri in range(50):
     model.addConstr( (sx_p_tot == quicksum (sx_p[n] for n in N) ), name='c_sxp_t' )
     model.addConstr( (sy_p_tot == quicksum (sy_p[p] for p in P) ), name='c_syp_t' )
 
-    # RELU Function Definition
+    # # RELU Function Definition
     # for layer in range(len(nn_layers)-1):
     #     for nn_i in range(nn_layers[layer+1]):
     #         model.addConstr( vrl[layer][nn_i] == max_(vnn[layer][nn_i], constant=0), name=f'c_layer{layer}_RELU[{nn_i}]')
@@ -466,18 +462,18 @@ for iteri in range(50):
     #     if layer == 0: 
     #         model.addConstrs((
     #             vnn[layer][out] == (
-    #                 weights[f"layer_{layer}"]['bias'][out] +
-    #                 quicksum( weights[f"layer_{layer}"]["weights"][P.index(p)][out] * sy_p[p] for p in P ) +
-    #                 quicksum( weights[f"layer_{layer}"]["weights"][n + len(P)][out] * sx_p[n] for n in N ) +
-    #                 ( weights[f"layer_{layer}"]["weights"][-2][out] * sx_p_tot ) + 
-    #                 ( weights[f"layer_{layer}"]["weights"][-1][out] * sy_p_tot )
+    #                 nn_weights[f"layer_{layer}"]['bias'][out] +
+    #                 quicksum( nn_weights[f"layer_{layer}"]["weights"][P.index(p)][out] * sy_p[p] for p in P ) +
+    #                 quicksum( nn_weights[f"layer_{layer}"]["weights"][n + len(P)][out] * sx_p[n] for n in N ) +
+    #                 ( nn_weights[f"layer_{layer}"]["weights"][-2][out] * sx_p_tot ) + 
+    #                 ( nn_weights[f"layer_{layer}"]["weights"][-1][out] * sy_p_tot )
     #             ) for out in range(nn_layers[layer+1])
     #         ), name=f'c_layer{layer}_neuron')
     #     else:
     #         model.addConstrs((
     #             vnn[layer][out] == (
-    #                 weights[f"layer_{layer}"]['bias'][out] +
-    #                 quicksum( weights[f"layer_{layer}"]["weights"][inp][out] * vrl[layer-1][inp] for inp in range(nn_layers[layer]) ) 
+    #                 nn_weights[f"layer_{layer}"]['bias'][out] +
+    #                 quicksum( nn_weights[f"layer_{layer}"]["weights"][inp][out] * vrl[layer-1][inp] for inp in range(nn_layers[layer]) ) 
     #             ) for out in range(nn_layers[layer+1])
     #         ), name=f'c_layer{layer}_neuron')
 
@@ -496,9 +492,10 @@ for iteri in range(50):
         quicksum(quicksum( aa[(p,n)] * book[(p,n)] for p in P) for n in N) + 
         quicksum( az[p] * oc[p] for p in P) +
         quicksum( (sy[p] - quicksum(aa[(p,n)] for n in N) - az[p]) * lb[p] for p in P) + 
+        # gam * vrl[-1][0]
         gam * pred_val
     )
-    explore_objective = LinExpr( 1 )
+    explore_objective = LinExpr( 0 )
     #endregion
 
     # Performs Simulation
@@ -510,10 +507,12 @@ for iteri in range(50):
         value_data = pd.DataFrame()
         for item in val_portion:
             value_data = pd.concat([value_data, item])
-        value_data.to_csv(f'data/simulation-value-iter{iteri}_{repl}_{warmup}_{duration}.csv', index=False)
+        value_data.to_csv(f'data/sim-optim-logs/simulation-value-iter{iteri}_{repl}_{warmup}_{duration}.csv', index=False)
+        if rank == 0: print(value_data['avg_cost'].mean())
     comm.Barrier()
 
-    if rank == 0: print(value_data['avg_cost'].mean())
+    # Fits a Predictive Model
+    # strategy = tf.distribute.MirroredStrategy()
 
     # Fits a Predictive Model
     if rank == 0:
@@ -521,14 +520,45 @@ for iteri in range(50):
         for n in N: value_data['x'] += value_data[f'x_{n+1}'] 
         value_data['y'] = 0
         for p in P: value_data['y'] += value_data[f'y_{p}']
+
         new_reg_weights = fitNN(value_data)
 
         for betaval in range(len(reg_weights)):
             reg_weights[betaval] = reg_weights[betaval] * (1-alpha) + new_reg_weights[betaval] * (alpha)
     
         # Save Data
-        with open(f'data/simulation-betas-iter{iteri}_{repl}_{warmup}_{duration}.pickle', 'wb') as file:
+        with open(f'data/sim-optim-logs/simulation-betas-iter{iteri}_{repl}_{warmup}_{duration}.pickle', 'wb') as file:
             pickle.dump(reg_weights, file) 
         # print(reg_weights)
     reg_weights = comm.bcast(reg_weights, root=0)
     comm.Barrier()
+# %% Visualize Policy
+
+# Import
+# with open('data/models/sim-optim.pickle', 'rb') as file:
+#     sim_weights = pickle.load(file) 
+# y_weights = sim_weights[0:3]
+# x_weights = sim_weights[3:-2]
+# y_tot = sim_weights[-1]
+# x_tot = sim_weights[-2]
+
+# # Save in a good format
+# weights = {'x': {}, 'y': {}}
+# for n in N:
+#     weights['x'][n] = x_weights[n] + x_tot
+
+# for p in range(len(P)):
+#     weights['y'][P[p]] = y_weights[p] + y_tot
+
+# # Calculate
+# a_coef = {(p,n):0 for p in P for n in N}
+# for n in N:
+#     for p in P:
+#         a_coef[(p,n)] += book[(p,n)]
+#         if n != N[0]: a_coef[(p,n)] += gam * weights['x'][n-1]
+#         a_coef[(p,n)] -= lb[p]
+#         a_coef[(p,n)] -= gam * weights['y'][p]
+# coef_df = pd.Series(a_coef).reset_index()
+# coef_df.columns = ['P','N','Val']
+# fig = px.line(coef_df, x='N',y='Val',color='P', title='Simulation Approximation - Scheduling Objective', markers=True)
+# fig.show(renderer="browser")

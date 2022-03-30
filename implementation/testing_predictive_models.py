@@ -45,9 +45,9 @@ P = data['index']['p']
 df_iter = pd.DataFrame()
 
 # durs = [100, 150, 250, 450, 850]
-for i in range(1):
-    df_new = pd.read_csv(f'data/simulation-value-iter{i}_5_50_80.csv')
-    df_new['type'] = f'iter{i}_50_50_450'
+for i in range(24):
+    df_new = pd.read_csv(f'data/sim-optim-logs/simulation-value-iter{i}_300_50_450.csv')
+    df_new['type'] = f'iter{i}_300_50_450'
     df_iter = pd.concat([df_iter, df_new])
 
 # %% Graph Data

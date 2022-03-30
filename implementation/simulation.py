@@ -9,11 +9,14 @@ import pickle
 from copy import deepcopy
 from multiprocessing import Pool
 from functools import partial
+from stable_baselines3 import PPO
 
+from optimRL import SchedEnv
 
 from tqdm import trange, tqdm
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 #endregion
 #region Load & Prepare Data
 # load data
@@ -181,7 +184,7 @@ def PPQPolicy(state, **kwargs):
 
     # Return action
     return(action)
-def RLPolicy(state):
+def RLPolicy(state, **kwargs):
     '''
     ### Input: 
     #       Dictionary containing current space: {"x": x, "y": y}
@@ -189,7 +192,42 @@ def RLPolicy(state):
     ### Output: Dictionary containing action: {"a": a, "z": z}
     ### Policy: Policy is created using Sample Baselines 3 with algorithm with custom environment
     '''
-    pass
+    model=kwargs['kwargs']['model']
+
+    # Modifies State
+    modified_state = deepcopy(state)
+    modified_state['x'] = [modified_state['x']]
+    modified_state['y'] = [[modified_state['y'][p] for p in P]]
+
+    # Generate action
+    raw_actions = model.predict(modified_state, deterministic=True)
+    raw_actions = raw_actions[0].reshape(len(P), len(N) + 1)
+    raw_ac_z = np.round(raw_actions[:,0])
+    raw_ac_a = np.round(raw_actions[:,1:])
+
+    # Ajust Action
+    ac_a = {p:[0 for n in N] for p in P}
+    ac_z = {p:0 for p in P}
+    action = {"a": ac_a, "z": ac_z}
+
+    # Divert Patients
+    rem_cap = scap
+    for p in range(len(P)):
+        action_temp = min(raw_ac_z[p], modified_state['y'][0][p], rem_cap)
+        rem_cap -= action_temp
+        modified_state['y'][0][p] -= action_temp
+        action['z'][P[p]] = action_temp
+
+    # Schedule remaining patients
+    for p in range(len(P)):
+        for n in N:
+            rem_cap = cap - modified_state['x'][0][n]
+            action_temp = min(raw_ac_a[p][n], modified_state['y'][0][p], rem_cap)
+            modified_state['x'][0][n] += action_temp
+            modified_state['y'][0][p] -= action_temp
+            action['a'][P[p]][n] = action_temp
+            
+    return(action)
 def SimPolicy(state, **kwargs):
     '''
     ### Input: 
@@ -325,18 +363,24 @@ fas_costs_dc = []
 fas_costs_avg = []
 
 # PPQ Betas
-with open('data/linear-betas.pickle', 'rb') as file:
+with open('data/models/ppq.pickle', 'rb') as file:
     PPQbetas = pickle.load(file)
 ppq_costs_dc = []
 ppq_costs_avg = []
 
-# Sim Weights
-with open('data/sim-optim-1-iter15_100_50_150.pickle', 'rb') as file:
+# Sim-Optim Weights
+with open('data/models/sim-optim.pickle', 'rb') as file:
     sim_weights = pickle.load(file) 
-sim_weights = sim_weights['weights']
 sim_costs_dc = []
 sim_costs_avg = []
 
+# RL Model
+rl_env = SchedEnv(N, P, cap, scap, dm, tg, oc, lb, gam)
+rl_model = PPO.load("data/models/rl-ppo", env=rl_env)
+rl_costs_dc = []
+rl_costs_avg = []
+
+#%%
 if __name__ == '__main__':
     pool = Pool(os.cpu_count())
     # FAS
@@ -347,14 +391,20 @@ if __name__ == '__main__':
     for disc_cost, avg_cost in tqdm(pool.imap_unordered(partial(simulation, policy=PPQPolicy, kwargs={'betas':PPQbetas}), replications), total=len(replications)):
         ppq_costs_dc.append(disc_cost)
         ppq_costs_avg.append(avg_cost)
-    # SIM-Optim
+    # SIM-Optim     
     for disc_cost, avg_cost in tqdm(pool.imap_unordered(partial(simulation, policy=SimPolicy, kwargs={'weights':sim_weights}), replications), total=len(replications)):
         sim_costs_dc.append(disc_cost)
         sim_costs_avg.append(avg_cost)
+    # RL
+    for repl in tqdm(replications):
+        disc_cost, avg_cost = simulation(repl, policy=RLPolicy, kwargs={'model':rl_model})
+        rl_costs_dc.append(disc_cost)
+        rl_costs_avg.append(avg_cost)
     pool.terminate()
 
-    print(f"Myopic Costs: {np.mean(fas_costs_avg)}")
-    print(f"PPQ Costs: {np.mean(ppq_costs_avg)}")
-    print(f"SimOptim Costs: {np.mean(sim_costs_avg)}")
+    print(f"Myopic Costs: mean: {round(np.mean(fas_costs_avg),2)} disc: {round(np.mean(fas_costs_dc),2)}")
+    print(f"PPQ Costs: mean: {round(np.mean(ppq_costs_avg),2)} disc: {round(np.mean(ppq_costs_dc),2)}")
+    print(f"SimOptim Costs: mean: {round(np.mean(sim_costs_avg),2)} disc: {round(np.mean(sim_costs_dc),2)}")
+    print(f"RL Costs: mean: {round(np.mean(rl_costs_avg),2)} disc: {round(np.mean(rl_costs_dc),2)}")
 #endregion
 # %%
