@@ -228,7 +228,7 @@ def valueApprox(states_range, repl, warmup, duration):
         disc_costs.append(disc_cost)
         avg_costs.append(avg_cost)
         sys.stdout.flush()
-        print(f'Process {rank} of {size} finished simulations {state_iters}')
+        # print(f'Process {rank} of {size} finished simulations {state_iters}')
     end_time = time.time()
     print(f'Process {rank} of {size} finished simulations {states_range} in {round(end_time-start_time,2)} seconds for {repl}_{warmup}_{duration}')
 
@@ -389,7 +389,7 @@ reg_weights = comm.bcast(reg_weights, root=0)
 
 # Performs Optimization
 n_states = 256 * 8 * 30
-repl = 300/30
+repl = 10
 warmup = 50
 duration = 450
 alpha = 1
