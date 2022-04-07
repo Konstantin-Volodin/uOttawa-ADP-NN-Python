@@ -1,3 +1,4 @@
+#%%
 #region Load Modules
 from random import random
 from tracemalloc import start
@@ -295,6 +296,7 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 
+#%%
 #region Prepare Data
 # Load Data
 if rank == 0:
@@ -386,8 +388,8 @@ reg_weights = comm.bcast(reg_weights, root=0)
 #endregion
 
 # Performs Optimization
-n_states = 256 * 8
-repl = 300
+n_states = 256 * 8 * 30
+repl = 300/30
 warmup = 50
 duration = 450
 alpha = 1
@@ -413,6 +415,7 @@ iterable = comm.scatter(iterable, root=0)
 sys.stdout.flush()
 
 # Optimization
+#%%
 for iteri in range(50):
 
     #region Creates an optimization model
@@ -535,30 +538,31 @@ for iteri in range(50):
 # %% Visualize Policy
 
 # Import
-# with open('data/models/sim-optim.pickle', 'rb') as file:
-#     sim_weights = pickle.load(file) 
-# y_weights = sim_weights[0:3]
-# x_weights = sim_weights[3:-2]
-# y_tot = sim_weights[-1]
-# x_tot = sim_weights[-2]
+with open('data/models/sim-optim.pickle', 'rb') as file:
+    sim_weights = pickle.load(file) 
+y_weights = sim_weights[0:3]
+x_weights = sim_weights[3:-2]
+y_tot = sim_weights[-1]
+x_tot = sim_weights[-2]
 
-# # Save in a good format
-# weights = {'x': {}, 'y': {}}
-# for n in N:
-#     weights['x'][n] = x_weights[n] + x_tot
+# Save in a good format
+weights = {'x': {}, 'y': {}}
+for n in N:
+    weights['x'][n] = x_weights[n] + x_tot
 
-# for p in range(len(P)):
-#     weights['y'][P[p]] = y_weights[p] + y_tot
+for p in range(len(P)):
+    weights['y'][P[p]] = y_weights[p] + y_tot
 
-# # Calculate
-# a_coef = {(p,n):0 for p in P for n in N}
-# for n in N:
-#     for p in P:
-#         a_coef[(p,n)] += book[(p,n)]
-#         if n != N[0]: a_coef[(p,n)] += gam * weights['x'][n-1]
-#         a_coef[(p,n)] -= lb[p]
-#         a_coef[(p,n)] -= gam * weights['y'][p]
-# coef_df = pd.Series(a_coef).reset_index()
-# coef_df.columns = ['P','N','Val']
-# fig = px.line(coef_df, x='N',y='Val',color='P', title='Simulation Approximation - Scheduling Objective', markers=True)
-# fig.show(renderer="browser")
+# Calculate
+a_coef = {(p,n):0 for p in P for n in N}
+for n in N:
+    for p in P:
+        a_coef[(p,n)] += book[(p,n)]
+        if n != N[0]: a_coef[(p,n)] += gam * weights['x'][n-1]
+        a_coef[(p,n)] -= lb[p]
+        a_coef[(p,n)] -= gam * weights['y'][p]
+coef_df = pd.Series(a_coef).reset_index()
+coef_df.columns = ['P','N','Val']
+fig = px.line(coef_df, x='N',y='Val',color='P', title='Simulation Approximation - Scheduling Objective', markers=True)
+fig.show(renderer="browser")
+# %%
