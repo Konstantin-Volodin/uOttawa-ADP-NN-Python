@@ -388,8 +388,8 @@ reg_weights = comm.bcast(reg_weights, root=0)
 #endregion
 
 # Performs Optimization
-n_states = 256 * 8 * 30
-repl = 10
+n_states = 256 * 8 * 3
+repl = 100
 warmup = 50
 duration = 450
 alpha = 1

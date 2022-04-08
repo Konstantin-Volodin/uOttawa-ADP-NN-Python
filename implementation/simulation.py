@@ -368,11 +368,17 @@ with open('data/models/ppq.pickle', 'rb') as file:
 ppq_costs_dc = []
 ppq_costs_avg = []
 
-# Sim-Optim Weights
+# Sim-Optim More Repls Weights
 with open('data/models/sim-optim.pickle', 'rb') as file:
-    sim_weights = pickle.load(file) 
-sim_costs_dc = []
-sim_costs_avg = []
+    sim_weights_mr = pickle.load(file) 
+sim_costs_dc_mr = []
+sim_costs_avg_mr = []
+
+# Sim-Optim Less Repls Weights
+with open('data/models/simulation-betas-iter10_10_50_450.pickle', 'rb') as file:
+    sim_weights_lr = pickle.load(file) 
+sim_costs_dc_lr = []
+sim_costs_avg_lr = []
 
 # RL Model
 rl_env = SchedEnv(N, P, cap, scap, dm, tg, oc, lb, gam)
@@ -391,10 +397,14 @@ if __name__ == '__main__':
     for disc_cost, avg_cost in tqdm(pool.imap_unordered(partial(simulation, policy=PPQPolicy, kwargs={'betas':PPQbetas}), replications), total=len(replications)):
         ppq_costs_dc.append(disc_cost)
         ppq_costs_avg.append(avg_cost)
-    # SIM-Optim     
-    for disc_cost, avg_cost in tqdm(pool.imap_unordered(partial(simulation, policy=SimPolicy, kwargs={'weights':sim_weights}), replications), total=len(replications)):
-        sim_costs_dc.append(disc_cost)
-        sim_costs_avg.append(avg_cost)
+    # SIM-Optim MR
+    for disc_cost, avg_cost in tqdm(pool.imap_unordered(partial(simulation, policy=SimPolicy, kwargs={'weights':sim_weights_mr}), replications), total=len(replications)):
+        sim_costs_dc_mr.append(disc_cost)
+        sim_costs_avg_mr.append(avg_cost)
+    # SIM-Optim LR  
+    for disc_cost, avg_cost in tqdm(pool.imap_unordered(partial(simulation, policy=SimPolicy, kwargs={'weights':sim_weights_lr}), replications), total=len(replications)):
+        sim_costs_dc_lr.append(disc_cost)
+        sim_costs_avg_lr.append(avg_cost)
     # RL
     for repl in tqdm(replications):
         disc_cost, avg_cost = simulation(repl, policy=RLPolicy, kwargs={'model':rl_model})
@@ -404,7 +414,8 @@ if __name__ == '__main__':
 
     print(f"Myopic Costs: mean: {round(np.mean(fas_costs_avg),2)} disc: {round(np.mean(fas_costs_dc),2)}")
     print(f"PPQ Costs: mean: {round(np.mean(ppq_costs_avg),2)} disc: {round(np.mean(ppq_costs_dc),2)}")
-    print(f"SimOptim Costs: mean: {round(np.mean(sim_costs_avg),2)} disc: {round(np.mean(sim_costs_dc),2)}")
+    print(f"SimOptim Costs More Repls: mean: {round(np.mean(sim_costs_avg_mr),2)} disc: {round(np.mean(sim_costs_dc_mr),2)}")
+    print(f"SimOptim Costs Less Repls: mean: {round(np.mean(sim_costs_avg_lr),2)} disc: {round(np.mean(sim_costs_dc_lr),2)}")
     print(f"RL Costs: mean: {round(np.mean(rl_costs_avg),2)} disc: {round(np.mean(rl_costs_dc),2)}")
 #endregion
 # %%

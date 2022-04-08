@@ -45,10 +45,10 @@ P = data['index']['p']
 df_iter = pd.DataFrame()
 
 # durs = [100, 150, 250, 450, 850]
-for i in range(24):
-    df_new = pd.read_csv(f'data/sim-optim-logs/simulation-value-iter{i}_300_50_450.csv')
-    df_new['type'] = f'iter{i}_300_50_450'
-    df_iter = pd.concat([df_iter, df_new])
+for i in range(20):
+    df_new = pd.read_csv(f'data/sim-optim-logs/simulation-value-iter{i}_10_50_450.csv')
+    df_new['type'] = f'iter{i}_10_50_450'
+    df_iter = pd.concat([df_iter, df_new.sample(10000)])
 
 # %% Graph Data
 # Review Data
@@ -60,20 +60,20 @@ df_tot['y'] = 0
 for p in P: df_tot['y'] += df_tot[f'y_{p}']
 df_tot = df_tot.sort_values(by=['x','y'])
 
-fig = px.scatter(df_tot, x='x', y='disc_cost', color='type')
-fig.update_traces(marker={'size': 5})
-fig.show(renderer='browser')
+# fig = px.scatter(df_tot, x='x', y='disc_cost', color='type')
+# fig.update_traces(marker={'size': 5})
+# fig.show(renderer='browser')
 
-fig = px.scatter(df_tot, x='y', y='disc_cost', color='type')
-fig.update_traces(marker={'size': 5})
-fig.show(renderer='browser')
+# fig = px.scatter(df_tot, x='y', y='disc_cost', color='type')
+# fig.update_traces(marker={'size': 5})
+# fig.show(renderer='browser')
 
 fig = px.scatter_3d(df_tot, x='x', y='y', z='disc_cost', color='type')
-fig.update_traces(marker={'size': 4})
+fig.update_traces(marker={'size': 3})
 fig.show(renderer='browser')
 
 fig = px.scatter_3d(df_tot, x='x', y='y', z='avg_cost', color='type')
-fig.update_traces(marker={'size': 4})
+fig.update_traces(marker={'size': 3})
 fig.show(renderer='browser')
 
 
