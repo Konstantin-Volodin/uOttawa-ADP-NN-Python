@@ -375,10 +375,17 @@ sim_costs_dc_mr = []
 sim_costs_avg_mr = []
 
 # Sim-Optim Less Repls Weights
-with open('data/models/simulation-betas-iter10_10_50_450.pickle', 'rb') as file:
+with open('data/models/simulation-betas-iter42_10_50_450.pickle', 'rb') as file:
     sim_weights_lr = pickle.load(file) 
 sim_costs_dc_lr = []
 sim_costs_avg_lr = []
+
+# Sim-Optim Med Repls Weights
+with open('data/models/simulation-betas-iter5_100_50_450.pickle', 'rb') as file:
+    sim_weights_ar = pickle.load(file) 
+sim_costs_dc_ar = []
+sim_costs_avg_ar = []
+
 
 # RL Model
 rl_env = SchedEnv(N, P, cap, scap, dm, tg, oc, lb, gam)
@@ -401,6 +408,10 @@ if __name__ == '__main__':
     for disc_cost, avg_cost in tqdm(pool.imap_unordered(partial(simulation, policy=SimPolicy, kwargs={'weights':sim_weights_mr}), replications), total=len(replications)):
         sim_costs_dc_mr.append(disc_cost)
         sim_costs_avg_mr.append(avg_cost)
+    # SIM-Optim ar  
+    for disc_cost, avg_cost in tqdm(pool.imap_unordered(partial(simulation, policy=SimPolicy, kwargs={'weights':sim_weights_ar}), replications), total=len(replications)):
+        sim_costs_dc_ar.append(disc_cost)
+        sim_costs_avg_ar.append(avg_cost)
     # SIM-Optim LR  
     for disc_cost, avg_cost in tqdm(pool.imap_unordered(partial(simulation, policy=SimPolicy, kwargs={'weights':sim_weights_lr}), replications), total=len(replications)):
         sim_costs_dc_lr.append(disc_cost)
@@ -416,6 +427,7 @@ if __name__ == '__main__':
     print(f"PPQ Costs: mean: {round(np.mean(ppq_costs_avg),2)} disc: {round(np.mean(ppq_costs_dc),2)}")
     print(f"SimOptim Costs More Repls: mean: {round(np.mean(sim_costs_avg_mr),2)} disc: {round(np.mean(sim_costs_dc_mr),2)}")
     print(f"SimOptim Costs Less Repls: mean: {round(np.mean(sim_costs_avg_lr),2)} disc: {round(np.mean(sim_costs_dc_lr),2)}")
+    print(f"SimOptim Costs Medium Repls: mean: {round(np.mean(sim_costs_avg_ar),2)} disc: {round(np.mean(sim_costs_dc_ar),2)}")
     print(f"RL Costs: mean: {round(np.mean(rl_costs_avg),2)} disc: {round(np.mean(rl_costs_dc),2)}")
 #endregion
 # %%
